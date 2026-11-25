@@ -1,0 +1,42 @@
+{
+  "name": "Papolona",
+  "slug": "Papolona",
+  "icon": "./assets/app-icon/icon.png",
+  "plugins": [
+    [
+      "expo-splash-screen",
+      {
+        "backgroundColor": "#17200C",
+        "image": "./assets/papolona_splash.png",
+        "resizeMode": "cover"
+      }
+    ],
+    [
+      "expo-image-picker",
+      {
+        "photosPermission": "Papolona uses your photos to update your profile picture."
+      }
+    ],
+    [
+      "expo-speech-recognition",
+      {
+        "microphonePermission": "Papolona uses your microphone to create voice journal entries.",
+        "speechRecognitionPermission": "Papolona turns your speech into text for your voice journal.",
+        "androidSpeechServicePackages": [
+          "com.google.android.googlequicksearchbox"
+        ]
+      }
+    ],
+    "expo-image",
+    "@react-native-google-signin/google-signin",
+    "expo-video"
+  ],
+  "android": {
+    "package": "com.anonymous.Papolona",
+    "adaptiveIcon": {
+      "foregroundImage": "./assets/app-icon/adaptive-foreground.png",
+      "backgroundImage": "./assets/app-icon/adaptive-background.png",
+      "backgroundColor": "#0568FB"
+    }
+  }
+}
