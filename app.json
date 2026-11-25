@@ -37,6 +37,12 @@
       "foregroundImage": "./assets/app-icon/adaptive-foreground.png",
       "backgroundImage": "./assets/app-icon/adaptive-background.png",
       "backgroundColor": "#0568FB"
-    }
+    },
+    "permissions": [
+      "android.permission.RECORD_AUDIO"
+    ]
+  },
+  "ios": {
+    "bundleIdentifier": "com.anonymous.Papolona"
   }
 }
