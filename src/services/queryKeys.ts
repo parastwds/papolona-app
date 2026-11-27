@@ -21,6 +21,15 @@ export const queryKeys = {
   artworkWall: ['artwork', 'wall'] as const,
   artworkTile: (id: string) => ['artwork', 'tile', id] as const,
   memberGallery: (userId: string) => ['artwork', 'member', userId] as const,
+  // Direct messages. Invalidate ['dms'] after a request, an answer, a message or a block.
+  dmsAll: ['dms'] as const,
+  dmInbox: ['dms', 'inbox'] as const,
+  dmConversation: (id: string) => ['dms', 'conversation', id] as const,
+  dmSearch: (q: string) => ['dms', 'search', q] as const,
+  dmBlocked: ['dms', 'blocked'] as const,
+  // Member profiles and requests to see them.
+  memberProfile: (id: string) => ['members', 'profile', id] as const,
+  profileAccessRequests: ['members', 'access-requests'] as const,
   // The marketplace. Invalidate ['market'] after listing, withdrawing or buying.
   marketAll: ['market'] as const,
   marketListings: ['market', 'listings'] as const,

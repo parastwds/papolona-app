@@ -15,6 +15,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { font, hp, wp } from '@/utils/responsive';
 import CustomHeader from '@/components/CustomHeader';
 import TabBackground from '@/components/TabBackground';
+import MemberSearch from '@/features/members/component/MemberSearch';
 import { SCREENS } from '@/constants/screens';
 import { RootStackParamList } from '@/navigation/types';
 import MapBanner from '@/features/community/component/MapBanner';
@@ -136,7 +137,15 @@ const DiscoverTab = () => {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
       >
+        {/* Find a member: their profile, a message request, their readings on request. */}
+        <MemberSearch
+          onOpen={user =>
+            navigation.navigate(SCREENS.memberProfile, { userId: user.id, name: user.name })
+          }
+        />
+        <View style={styles.sectionGap} />
         <SectionTitle title="Around the world" />
         <MapBanner onPress={() => navigation.navigate(SCREENS.communityMap)} />
 

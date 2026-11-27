@@ -47,6 +47,7 @@ import {
   useMembership,
   useMyListings,
   useProbation,
+  useProfileAccessRequests,
 } from '@/services/queries';
 import { formatPrice } from '@/services/session';
 import { useSyncTimeZone } from '@/services/useSyncTimeZone';
@@ -95,6 +96,7 @@ const ProfileTab = () => {
   // Saves the phone's time zone, which reminder emails are timed by.
   const timeZone = useSyncTimeZone();
   const probation = useProbation();
+  const accessRequests = useProfileAccessRequests();
   const membership = useMembership(user?.status === 'member');
   // NFTs the user has sold on the marketplace, and what they received.
   const sold = (useMyListings(!!user).data?.listings ?? []).filter(
@@ -358,6 +360,12 @@ const ProfileTab = () => {
             <AppMenuItem
               title="Notifications & reminders"
               icon={Bell}
+              // Members waiting to see your readings and NFTs.
+              badge={
+                accessRequests.data?.length
+                  ? `${accessRequests.data.length} NEW`
+                  : undefined
+              }
               onPress={() => navigation.navigate(SCREENS.reminders)}
             />
             <View style={styles.menuDivider} />

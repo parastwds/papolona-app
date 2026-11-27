@@ -1445,3 +1445,175 @@ export async function restoreSession(): Promise<boolean> {
     return false;
   }
 }
+
+// ── Direct messages ─────────────────────────────────────────────────────────
+// A conversation starts as a message request (with a first message); once the
+// other member accepts, both can write. Either can block the other.
+
+export type DmUser = { id: string; name: string; avatarUrl: string | null };
+
+// Where a conversation stands for the signed-in user.
+export type DmState = 'connected' | 'incoming' | 'requested';
+
+export type DmThread = {
+  id: string;
+  state: DmState;
+  other: DmUser;
+  lastMessage: { text: string; createdAt: string; mine: boolean } | null;
+  lastActivityAt: string;
+  unread: number;
+  // Who has blocked whom, if anyone.
+  blocked: 'by_me' | 'by_them' | null;
+  canSend: boolean;
+};
+
+export type DmMessage = { id: string; text: string; createdAt: string; mine: boolean };
+
+export type DmInbox = {
+  conversations: DmThread[];
+  requests: DmThread[];
+  sent: DmThread[];
+  unreadCount: number;
+};
+
+export type DmConversation = {
+  thread: DmThread;
+  // Newest first.
+  messages: DmMessage[];
+  nextBefore: string | null;
+};
+
+// A member found in search, and where the user stands with them.
+export type DmSearchUser = DmUser & {
+  state: 'none' | DmState;
+  threadId: string | null;
+};
+
+export function fetchDmInbox() {
+  return authenticatedRequest<DmInbox>('/dms');
+}
+
+export async function searchMembers(q: string) {
+  const result = await authenticatedRequest<{ users: DmSearchUser[] }>(
+    `/dms/search?q=${encodeURIComponent(q)}`,
+  );
+  return result.users;
+}
+
+export function fetchConversation(id: string, before?: string) {
+  const query = before ? `?before=${encodeURIComponent(before)}` : '';
+  return authenticatedRequest<DmConversation>(
+    `/dms/${encodeURIComponent(id)}${query}`,
+  );
+}
+
+/** A message request to another member, with its first message. */
+export async function sendMessageRequest(userId: string, text: string) {
+  const result = await authenticatedRequest<{ thread: DmThread }>(
+    '/dms/requests',
+    { method: 'POST', body: JSON.stringify({ userId, text }) },
+  );
+  return result.thread;
+}
+
+export async function answerMessageRequest(id: string, accept: boolean) {
+  const result = await authenticatedRequest<{ thread: DmThread | null }>(
+    `/dms/${encodeURIComponent(id)}/${accept ? 'accept' : 'decline'}`,
+    { method: 'POST' },
+  );
+  return result.thread;
+}
+
+export async function sendDirectMessage(id: string, text: string) {
+  const result = await authenticatedRequest<{ message: DmMessage }>(
+    `/dms/${encodeURIComponent(id)}/messages`,
+    { method: 'POST', body: JSON.stringify({ text }) },
+  );
+  return result.message;
+}
+
+export async function fetchBlockedMembers() {
+  const result = await authenticatedRequest<{
+    users: (DmUser & { blockedAt: string })[];
+  }>('/dms/blocks');
+  return result.users;
+}
+
+export function blockMember(userId: string) {
+  return authenticatedRequest<{ blocked: boolean }>('/dms/blocks', {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  });
+}
+
+export function unblockMember(userId: string) {
+  return authenticatedRequest<{ blocked: boolean }>(
+    `/dms/blocks/${encodeURIComponent(userId)}`,
+    { method: 'DELETE' },
+  );
+}
+
+// ── Member profiles ─────────────────────────────────────────────────────────
+// Anyone sees a member's profile; their readings and NFTs open only once the
+// member approves the viewer's request.
+
+export type ProfileAccess = 'self' | 'approved' | 'pending' | 'denied' | 'none';
+
+export type MemberProfile = {
+  member: DmUser & {
+    bio: string;
+    country: string | null;
+    role: string;
+    joinedAt: string;
+  };
+  stats: { readings: number; emblems: number; nfts: number };
+  access: ProfileAccess;
+  dm: { state: 'none' | DmState; threadId: string | null };
+  blocked: 'by_me' | null;
+  // Only with access.
+  readings?: {
+    id: string;
+    clue: string;
+    question: string;
+    generatedAt: string;
+    coherent: boolean;
+    interpretation: string;
+  }[];
+  nfts?: NftSeries[];
+};
+
+export type ProfileAccessRequest = {
+  id: string;
+  createdAt: string;
+  viewer: DmUser;
+};
+
+export function fetchMemberProfile(id: string) {
+  return authenticatedRequest<MemberProfile>(
+    `/members/${encodeURIComponent(id)}`,
+  );
+}
+
+export async function requestProfileAccess(id: string) {
+  const result = await authenticatedRequest<{ access: ProfileAccess }>(
+    `/members/${encodeURIComponent(id)}/access`,
+    { method: 'POST' },
+  );
+  return result.access;
+}
+
+export async function fetchProfileAccessRequests() {
+  const result = await authenticatedRequest<{
+    requests: ProfileAccessRequest[];
+  }>('/members/access-requests');
+  return result.requests;
+}
+
+export function answerProfileAccess(id: string, approve: boolean) {
+  return authenticatedRequest<{ status: string }>(
+    `/members/access-requests/${encodeURIComponent(id)}/${
+      approve ? 'approve' : 'deny'
+    }`,
+    { method: 'POST' },
+  );
+}

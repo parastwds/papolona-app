@@ -12,6 +12,7 @@ import HomeTab from '@/features/home/screen/HomeTab';
 import JournalTab from '@/features/journal/screen/JournalTab';
 import DiscoverTab from '@/features/discover/screen/DiscoverTab';
 import CollectTab from '@/features/collect/screen/CollectTab';
+import MessagesTab from '@/features/messages/screen/MessagesTab';
 import ProfileTab from '@/features/profile/screen/ProfileTab';
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
@@ -38,6 +39,11 @@ export default function BottomTabs() {
         name={BOTTOMTABSCREN.discover}
         component={DiscoverTab}
         options={{ title: BOTTOMTABSCREN.journal }}
+      />
+      <Tab.Screen
+        name={BOTTOMTABSCREN.messages}
+        component={MessagesTab}
+        options={{ title: 'Messages' }}
       />
       <Tab.Screen
         name={BOTTOMTABSCREN.collect}
