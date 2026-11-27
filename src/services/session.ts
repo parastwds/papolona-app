@@ -747,6 +747,10 @@ export type Reading = {
   // expired is then true.
   deadlineAt?: string;
   expired?: boolean;
+  // The member's contest of a judgement after all three attempts failed, and
+  // whether they may still send one (once, within 90 days).
+  contest?: { text: string; at: string } | null;
+  canContest?: boolean;
 };
 
 // One way to split a clue, offered as a prompt: its parts in order, each with
@@ -826,6 +830,8 @@ export type NftSeries = {
     priceCents: number;
     currency: string;
     createdAt: string;
+    // When its Collectors' auction closes; null for listings from before auctions.
+    collectorsUntil?: string | null;
   } | null;
 };
 
@@ -914,13 +920,31 @@ export type Listing = {
   sellerProceedsCents?: number;
   // Who bought it, once sold (seller only).
   buyer?: { id: string; name: string } | null;
+  // Where it stands in its sale: first an auction for Collectors, then (without bids) open to all.
+  auction?: ListingAuction;
   series: NftSeries;
+};
+
+export type ListingAuction = {
+  // 'collectors': Collectors bid until collectorsUntil; 'open': anyone can buy it at its price.
+  phase: 'collectors' | 'open';
+  collectorsUntil: string | null;
+  bidCount: number;
+  highestBidCents: number | null;
+  // The least the next bid may be: the starting price, or 5% over the highest bid.
+  minNextBidCents: number;
+  highestBidMine: boolean;
+  // Who leads the auction (seller only).
+  highestBidder?: { id: string; name: string };
+  canBid: boolean;
+  canBuy: boolean;
 };
 
 export type ListingPage = {
   listings: Listing[];
   nextBefore: string | null;
   feePercent: number;
+  auctionDays?: number;
 };
 
 /** A page of the marketplace, newest first. */
@@ -961,7 +985,16 @@ export async function cancelListing(id: string) {
   return result.listing;
 }
 
-/** Buys a listing (demo payment): the NFT becomes the user's. */
+/** A Collector's bid in a listing's Collectors' auction. Resolves to the listing as it now stands. */
+export async function placeBid(id: string, amountCents: number) {
+  const result = await authenticatedRequest<{ listing: Listing }>(
+    `/market/listings/${encodeURIComponent(id)}/bids`,
+    { method: 'POST', body: JSON.stringify({ amountCents }) },
+  );
+  return result.listing;
+}
+
+/** Buys a listing (demo payment) once its auction closed without bids: the NFT becomes the user's. */
 export async function buyListing(id: string) {
   return authenticatedRequest<{ listing: Listing; series: NftSeries }>(
     `/market/listings/${encodeURIComponent(id)}/buy`,
@@ -1124,6 +1157,17 @@ export function rateReading(id: string, stars: number) {
   return authenticatedRequest<Reading>(
     `/clue-string/${encodeURIComponent(id)}/rating`,
     { method: 'PUT', body: JSON.stringify({ satisfaction: stars * 2 }) },
+  );
+}
+
+/**
+ * Contests the judgement on a reading that failed all three attempts: the
+ * member's case is emailed to Papolona with the reading. Once per reading.
+ */
+export function contestReading(id: string, text: string) {
+  return authenticatedRequest<Reading>(
+    `/clue-string/${encodeURIComponent(id)}/contest`,
+    { method: 'POST', body: JSON.stringify({ text }) },
   );
 }
 

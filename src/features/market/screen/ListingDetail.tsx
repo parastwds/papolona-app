@@ -5,6 +5,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,7 +22,7 @@ import { RootStackParamList } from '@/navigation/types';
 import { getErrorMessage } from '@/services/api';
 import { useListing } from '@/services/queries';
 import { queryKeys } from '@/services/queryKeys';
-import { buyListing, cancelListing } from '@/services/session';
+import { buyListing, cancelListing, placeBid } from '@/services/session';
 import ScreenHeader, { GOLD } from '@/features/artwork/component/ScreenHeader';
 import { rarityOf } from '@/features/series/artworks';
 import RarityMark from '@/features/series/component/RarityMark';
@@ -29,7 +30,7 @@ import EmblemSet, {
   EmblemSetViewer,
 } from '@/features/series/component/EmblemSet';
 import { font, hp, wp } from '@/utils/responsive';
-import { listingPrice } from './Marketplace';
+import { auctionTimeLeft, inAuction, listingPrice } from './Marketplace';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Listing'>;
 
@@ -46,20 +47,56 @@ const formatDate = (iso: string) =>
     year: 'numeric',
   });
 
+/** "120" or "120.50" from cents, for the bid field. */
+const dollarsText = (cents: number) =>
+  cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2);
+
+/** Cents from what was typed in the bid field ("$1,250.5" → 125050), or null. */
+const parseDollars = (text: string) => {
+  const n = Number(text.replace(/[$,\s]/g, ''));
+  return Number.isFinite(n) && n > 0 ? Math.round(n * 100) : null;
+};
+
 /**
- * One NFT for sale: the emblem, what it is, who sells it and its price. Anyone
- * signed in can buy it (demo payment), and it moves to their Gallery. The
- * seller sees their share and can take it off sale.
+ * One NFT for sale: the emblem, what it is, who sells it and its price.
+ * Papolona offers it to Collectors first: during its Collectors' auction they
+ * bid (each bid beating the highest) and the highest bid wins when it closes.
+ * Without bids it then opens to everyone, who can buy it outright (demo
+ * payment) and it moves to their Gallery. The seller sees their share and the
+ * leading bid, and can take it off sale while nobody has bid.
  */
 const ListingDetail = ({ navigation, route }: Props) => {
   const { id } = route.params;
   const queryClient = useQueryClient();
   const query = useListing(id);
   const [zoomed, setZoomed] = useState(false);
-  const [confirming, setConfirming] = useState(false);
+  // The sheet open over the listing: buying outright, or placing a bid.
+  const [sheet, setSheet] = useState<'buy' | 'bid' | null>(null);
+  const confirming = sheet !== null;
+  const setConfirming = (open: boolean) => setSheet(open ? 'buy' : null);
+  const [bidText, setBidText] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const { ready: hasBilling } = useHasBilling();
+
+  const bid = async () => {
+    const cents = parseDollars(bidText);
+    if (busy || !hasBilling || cents === null) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      const listing = await placeBid(id, cents);
+      queryClient.setQueryData(queryKeys.marketListing(id), listing);
+      queryClient.invalidateQueries({ queryKey: queryKeys.marketAll });
+      setSheet(null);
+      setMessage('');
+    } catch (error) {
+      setMessage(getErrorMessage(error, 'Could not place your bid. Please try again.'));
+      queryClient.invalidateQueries({ queryKey: queryKeys.marketListing(id) });
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const afterChange = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.marketAll });
@@ -117,6 +154,11 @@ const ListingDetail = ({ navigation, route }: Props) => {
     const rarity = rarityOf(series.rarity);
     const price = listingPrice(listing);
     const open = listing.status === 'active';
+    const auction = listing.auction;
+    const auctioning = inAuction(listing);
+    const money = (cents: number) =>
+      listingPrice({ priceCents: cents, currency: listing.currency });
+    const minBid = auction ? money(auction.minNextBidCents) : price;
 
     const facts: [string, React.ReactNode][] = [
       [
@@ -135,15 +177,49 @@ const ListingDetail = ({ navigation, route }: Props) => {
           {listing.mine ? 'You' : listing.seller.name}
         </Text>,
       ],
-      ['Price', <Text style={styles.priceValue}>{price}</Text>],
     ];
+    if (auctioning && auction) {
+      // During the Collectors' auction: the starting price, the bids and when it closes.
+      facts.push(
+        ['Starting price', <Text style={styles.factValue}>{price}</Text>],
+        [
+          'Top bid',
+          <Text style={auction.highestBidCents !== null ? styles.priceValue : styles.factValue}>
+            {auction.highestBidCents !== null
+              ? `${money(auction.highestBidCents)}${auction.highestBidMine ? ' (yours)' : ''}`
+              : 'No bids yet'}
+          </Text>,
+        ],
+        ['Bids', <Text style={styles.factValue}>{auction.bidCount}</Text>],
+      );
+      if (listing.mine && auction.highestBidder) {
+        facts.push([
+          'Leading',
+          <Text style={styles.factValue}>{auction.highestBidder.name}</Text>,
+        ]);
+      }
+      if (auction.collectorsUntil) {
+        facts.push([
+          'Closes',
+          <Text style={styles.factValue}>
+            {formatDate(auction.collectorsUntil)} · {auctionTimeLeft(listing)}
+          </Text>,
+        ]);
+      }
+    } else {
+      facts.push([
+        listing.status === 'sold' ? 'Sold for' : 'Price',
+        <Text style={styles.priceValue}>{price}</Text>,
+      ]);
+    }
     if (listing.mine && listing.buyer) {
       facts.push([
         'Bought by',
         <Text style={styles.factValue}>{listing.buyer.name}</Text>,
       ]);
     }
-    if (listing.mine && listing.sellerProceedsCents !== undefined) {
+    // While bids are still coming in, the seller's share isn't known yet.
+    if (listing.mine && listing.sellerProceedsCents !== undefined && !auctioning) {
       facts.push([
         open ? 'You receive' : 'You received',
         <Text style={styles.factValue}>
@@ -201,19 +277,50 @@ const ListingDetail = ({ navigation, route }: Props) => {
         ) : listing.mine ? (
           <>
             <Text style={[styles.body, styles.status]}>
-              Your NFT is for sale. Papolona keeps half of the sale.
+              {auctioning
+                ? `Papolona, as your agent, is offering your NFT to Collector members in an auction until ${
+                    auction?.collectorsUntil ? formatDate(auction.collectorsUntil) : 'it closes'
+                  }: the highest bid then wins. With no bids it opens to everyone at ${price}. Papolona keeps half of the sale.`
+                : 'Your NFT is for sale to everyone. Papolona keeps half of the sale.'}
             </Text>
-            <AppButton
-              title="Take off sale"
-              onPress={withdraw}
-              disabled={busy}
-              loading={busy}
-              variant="outline"
-              style={styles.secondaryButton}
-              textStyle={styles.secondaryText}
-            />
+            {auction && auction.bidCount > 0 ? (
+              <Text style={[styles.body, styles.status]}>
+                Collectors have bid, so it stays in the auction until it closes.
+              </Text>
+            ) : (
+              <AppButton
+                title="Take off sale"
+                onPress={withdraw}
+                disabled={busy}
+                loading={busy}
+                variant="outline"
+                style={styles.secondaryButton}
+                textStyle={styles.secondaryText}
+              />
+            )}
           </>
-        ) : (
+        ) : auctioning ? (
+          <>
+            <Text style={[styles.body, styles.status]}>
+              {auction?.highestBidMine
+                ? 'You have the highest bid. If nobody outbids you before the auction closes, the NFT is yours at your bid.'
+                : 'Collectors’ auction: Papolona offers this NFT to Collector members first. Each bid must beat the highest so far, and the highest bid when it closes wins.'}
+            </Text>
+            {auction?.canBid ? (
+              <AppButton
+                title={`Bid ${minBid} or more`}
+                onPress={() => {
+                  setMessage('');
+                  setBidText(dollarsText(auction.minNextBidCents));
+                  setSheet('bid');
+                }}
+                variant="primary"
+                style={styles.button}
+                textStyle={styles.buttonText}
+              />
+            ) : null}
+          </>
+        ) : auction && !auction.canBuy ? null : (
           <AppButton
             title={`Buy for ${price}`}
             onPress={() => {
@@ -230,7 +337,57 @@ const ListingDetail = ({ navigation, route }: Props) => {
         ) : null}
 
         <AppBottomModal
-          visible={confirming}
+          visible={sheet === 'bid'}
+          onClose={() => setSheet(null)}
+          background={SHEET_ARTWORK}
+        >
+          <Text accessibilityRole="header" style={styles.sheetTitle}>
+            Bid on this {rarity.label}
+          </Text>
+          <Text style={styles.sheetText}>
+            If yours is the highest bid when the auction closes
+            {auction?.collectorsUntil
+              ? ` on ${formatDate(auction.collectorsUntil)}`
+              : ''}
+            , the NFT is yours and you pay your bid. It then moves to your
+            Gallery, under My NFT investments.
+          </Text>
+          <View style={styles.fee}>
+            <Text style={styles.factLabel}>Your bid</Text>
+            <View style={styles.bidField}>
+              <Text style={styles.priceValue}>$</Text>
+              <TextInput
+                value={bidText}
+                onChangeText={setBidText}
+                keyboardType="decimal-pad"
+                accessibilityLabel="Your bid in dollars"
+                style={styles.bidInput}
+                selectionColor={GOLD}
+              />
+            </View>
+          </View>
+          <Text style={styles.note}>At least {minBid}.</Text>
+          <BillingOnFile
+            onEdit={() => {
+              setSheet(null);
+              navigation.navigate(SCREENS.billingInfo);
+            }}
+          />
+          <Text style={styles.note}>Demo payment: nobody is charged.</Text>
+          {message ? <Text style={styles.error}>{message}</Text> : null}
+          <AppButton
+            title="Place bid"
+            onPress={bid}
+            disabled={busy || !hasBilling || parseDollars(bidText) === null}
+            loading={busy}
+            variant="primary"
+            style={styles.button}
+            textStyle={styles.buttonText}
+          />
+        </AppBottomModal>
+
+        <AppBottomModal
+          visible={sheet === 'buy'}
           onClose={() => setConfirming(false)}
           background={SHEET_ARTWORK}
         >
@@ -285,9 +442,11 @@ const ListingDetail = ({ navigation, route }: Props) => {
               ? `${rarityOf(query.data.series.rarity).label} ${
                   query.data.status === 'sold'
                     ? 'sold'
-                    : query.data.status === 'active'
-                    ? 'for sale'
-                    : '· off sale'
+                    : query.data.status !== 'active'
+                    ? '· off sale'
+                    : inAuction(query.data)
+                    ? 'at auction'
+                    : 'for sale'
                 }`
               : 'For sale'
           }
@@ -375,4 +534,17 @@ const styles = StyleSheet.create({
     borderColor: HAIRLINE,
   },
   note: { marginTop: hp(12), color: MUTED, fontSize: font(12) },
+  bidField: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  bidInput: {
+    minWidth: wp(110),
+    paddingVertical: hp(6),
+    paddingHorizontal: wp(10),
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(232, 213, 138, 0.45)',
+    color: GOLD,
+    fontSize: font(18),
+    fontWeight: '600',
+    textAlign: 'right',
+  },
 });

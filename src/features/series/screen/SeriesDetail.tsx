@@ -378,7 +378,14 @@ const SeriesDetail = ({ navigation, route }: Props) => {
               : !item.convertedAt
               ? 'Convert it into an NFT to sell it'
               : item.listing
-              ? `For sale in Discover at ${usd(item.listing.priceCents)}`
+              ? item.listing.collectorsUntil &&
+                new Date(item.listing.collectorsUntil) > new Date()
+                ? `In the Collectors’ auction from ${usd(
+                    item.listing.priceCents,
+                  )}, until ${new Date(
+                    item.listing.collectorsUntil,
+                  ).toLocaleDateString([], { day: 'numeric', month: 'long' })}`
+                : `For sale in Discover at ${usd(item.listing.priceCents)}`
               : 'Private: not for sale'
           }
           action={
@@ -592,13 +599,15 @@ const SeriesDetail = ({ navigation, route }: Props) => {
     return (
       <>
         <Text accessibilityRole="header" style={styles.sheetTitle}>
-          Put it up for sale
+          Put it up for auction
         </Text>
         <Text style={styles.sheetText}>
-          It becomes public in Discover, on the marketplace and the collective
-          artwork. Anyone in Papolona can buy it; the NFT then moves to them.
-          Papolona, as your agent, shares the sale with you equally: it keeps{' '}
-          {MARKET_FEE_PERCENT}%, reinvested in the ecosystem.
+          It becomes public on the collective artwork. Papolona, as your agent,
+          first offers it to Collector members in an auction for 90 days:
+          Collectors bid from your starting price, and the highest bid wins
+          when the auction closes. If nobody bids, it opens to everyone in
+          Papolona at your price. Papolona shares the sale with you equally: it
+          keeps {MARKET_FEE_PERCENT}%, reinvested in the ecosystem.
         </Text>
         {item.suggestedResalePrice ? (
           <Text
@@ -626,13 +635,13 @@ const SeriesDetail = ({ navigation, route }: Props) => {
           />
         </View>
         <View style={styles.fee}>
-          <Text style={styles.factLabel}>You receive</Text>
+          <Text style={styles.factLabel}>You receive at least</Text>
           <Text style={styles.feeValue}>{proceeds ?? '—'}</Text>
         </View>
         {demoNote}
         {errorNote}
         <AppButton
-          title={cents ? `Sell for ${usd(cents)}` : 'Sell'}
+          title={cents ? `Start auction from ${usd(cents)}` : 'Start auction'}
           onPress={sell}
           disabled={busy !== null || belowMinimum}
           loading={busy === 'sell'}
@@ -651,7 +660,8 @@ const SeriesDetail = ({ navigation, route }: Props) => {
       </Text>
       <Text style={styles.sheetText}>
         It leaves the marketplace and stays yours, still on the collective
-        artwork. You can sell it again later.
+        artwork. You can sell it again later. Once Collectors have bid on it, it
+        stays in the auction until it closes.
       </Text>
       {errorNote}
       <AppButton

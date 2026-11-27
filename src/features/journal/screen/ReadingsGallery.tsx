@@ -6,8 +6,10 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ChevronRight } from 'lucide-react-native';
@@ -19,7 +21,8 @@ import { SCREENS } from '@/constants/screens';
 import { RootStackParamList } from '@/navigation/types';
 import { getErrorMessage } from '@/services/api';
 import { useProbation, useReadings, useSeriesList } from '@/services/queries';
-import { starsOf, type Reading } from '@/services/session';
+import { queryKeys } from '@/services/queryKeys';
+import { contestReading, starsOf, type Reading } from '@/services/session';
 import AppBottomModal from '@/components/AppBottomModal';
 import ScreenHeader from '@/features/artwork/component/ScreenHeader';
 import { SUB_RIPPLE } from '@/features/profile/component/ProfileSubScreen';
@@ -32,12 +35,117 @@ import { localDay } from '../journalDays';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ReadingsGallery'>;
 
+const MIN_CONTEST_LENGTH = 20;
+
+/**
+ * A reading that failed all three attempts may have its judgement contested,
+ * once, within 90 days: the member says why they believe it is coherent and it
+ * is emailed to Papolona with the reading. Once sent, it shows what they wrote.
+ */
+const ContestBox = ({
+  reading,
+  onContested,
+}: {
+  reading: Reading;
+  onContested: (reading: Reading) => void;
+}) => {
+  const [writing, setWriting] = useState(false);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  if (reading.contest) {
+    return (
+      <View style={styles.detailBox}>
+        <Text style={styles.boxLabel}>Judgement contested</Text>
+        <Text style={styles.detailFeedback}>
+          Sent to Papolona on{' '}
+          {new Date(reading.contest.at).toLocaleDateString([], {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+          })}
+          . Papolona will reply by email.
+        </Text>
+        <Text style={styles.detailText}>{reading.contest.text}</Text>
+      </View>
+    );
+  }
+
+  const canSend = !busy && text.trim().length >= MIN_CONTEST_LENGTH;
+  const send = async () => {
+    if (!canSend) return;
+    setBusy(true);
+    setError('');
+    try {
+      onContested(await contestReading(reading.id, text.trim()));
+    } catch (err) {
+      setError(getErrorMessage(err, 'Could not send your contest. Please try again.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <View style={styles.detailBox}>
+      <Text style={styles.boxLabel}>Contest this judgement</Text>
+      <Text style={styles.detailFeedback}>
+        This reading did not pass after all three attempts. If you believe it is
+        coherent, tell Papolona why: your reading and your case are sent to
+        Papolona, who will reply by email. You can contest a reading once.
+      </Text>
+      {writing ? (
+        <>
+          <TextInput
+            value={text}
+            onChangeText={setText}
+            multiline
+            maxLength={3000}
+            textAlignVertical="top"
+            placeholder="Why I believe my reading is coherent…"
+            placeholderTextColor="rgba(205, 214, 198, 0.42)"
+            accessibilityLabel="Why you believe your reading is coherent"
+            style={styles.contestInput}
+          />
+          {error ? <Text style={styles.contestError}>{error}</Text> : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !canSend, busy }}
+            disabled={!canSend}
+            onPress={send}
+            style={({ pressed }) => [
+              styles.contestButton,
+              !canSend && styles.disabled,
+              pressed && styles.pressed,
+            ]}
+          >
+            {busy ? (
+              <ActivityIndicator color="#172016" />
+            ) : (
+              <Text style={styles.contestButtonText}>Send to Papolona</Text>
+            )}
+          </Pressable>
+        </>
+      ) : (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setWriting(true)}
+          style={({ pressed }) => [styles.contestButton, pressed && styles.pressed]}
+        >
+          <Text style={styles.contestButtonText}>Contest judgement</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+};
+
 /**
  * Every reading the user has made, newest first; tap one to see its question in
  * full. Opened for a day (from the Journal's calendar), that day's reading opens.
  */
 const ReadingsGallery = ({ navigation, route }: Props) => {
   const day = route.params?.day;
+  const queryClient = useQueryClient();
   const readings = useReadings();
   // A reading in a completed emblem series carries that series' rarity mark.
   const isMember = useProbation().data?.status === 'member';
@@ -148,33 +256,34 @@ const ReadingsGallery = ({ navigation, route }: Props) => {
             {/* The day's notes first: kept as written, not edited later. */}
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel="Journal: notes from this day, not editable at a later date"
               onPress={() => openDay(open)}
               android_ripple={SUB_RIPPLE}
               style={({ pressed }) => [
                 styles.detailBox,
-                styles.dayRow,
+                styles.inlineRow,
                 pressed && styles.pressed,
               ]}
             >
-              <View style={styles.flex}>
-                <Text style={styles.boxLabel}>Journal</Text>
-                <Text style={styles.dayRowText}>Notes from this day</Text>
+              <Text style={styles.boxLabel}>Journal</Text>
+              <Text style={[styles.flex, styles.dayRowText]}>
+                Notes from this day{' '}
                 <Text style={styles.dayRowHint}>
-                  Not editable at a later date
+                  are not editable at a later date
                 </Text>
-              </View>
+              </Text>
               <ChevronRight size={18} color="#6F8274" strokeWidth={1.6} />
             </Pressable>
-            {open.question ? (
-              <View style={styles.detailBox}>
-                <Text style={styles.boxLabel}>My question</Text>
-                <Text style={styles.detailQuestion}>{open.question}</Text>
-              </View>
-            ) : null}
             <View style={styles.detailBox}>
+              <Text style={styles.boxLabel}>My question</Text>
+              <Text style={styles.detailQuestion}>
+                {open.question || 'Left blank: an invitation for Papolona’s comment.'}
+              </Text>
+            </View>
+            <View style={[styles.detailBox, styles.inlineRow]}>
               <Text style={styles.boxLabel}>Papolona clue string</Text>
               <Text
-                style={styles.detailClue}
+                style={[styles.flex, styles.detailClue]}
                 adjustsFontSizeToFit
                 numberOfLines={1}
                 accessibilityLabel={open.clue.split('').join(' ')}
@@ -182,39 +291,63 @@ const ReadingsGallery = ({ navigation, route }: Props) => {
                 {open.clue}
               </Text>
             </View>
-            <View style={styles.detailBox}>
-              <Text style={styles.boxLabel}>
-                My interpretation ·{' '}
-                <Text
-                  style={
-                    open.interpretation?.verdict === 'pass'
-                      ? styles.verdictPass
-                      : styles.verdictFail
-                  }
-                >
-                  {open.interpretation
-                    ? open.interpretation.verdict === 'pass'
-                      ? 'Passed'
-                      : 'Invalid'
-                    : 'Incomplete'}
-                </Text>
-              </Text>
-              {open.interpretation ? (
-                <>
-                  <Text style={styles.detailText}>
-                    {open.interpretation.text}
-                  </Text>
-                  <Text style={styles.detailFeedback}>
-                    {open.interpretation.feedback}
-                  </Text>
-                </>
-              ) : null}
-              {open.interpretation?.verdict !== 'pass' ? (
-                <Text style={styles.detailFeedback}>
+            {(() => {
+              const valid = open.interpretation?.verdict === 'pass';
+              return (
+                <View style={styles.detailBox}>
+                  <View style={styles.inlineRow}>
+                    <Text style={styles.boxLabel}>My interpretation</Text>
+                    <View
+                      style={[
+                        styles.verdictBadge,
+                        valid ? styles.badgePass : styles.badgeFail,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.verdictBadgeText,
+                          valid ? styles.verdictPass : styles.verdictFail,
+                        ]}
+                      >
+                        {valid ? 'Coherent' : 'Incomplete or invalid'}
+                      </Text>
+                    </View>
+                  </View>
+                  {open.interpretation?.text ? (
+                    <Text style={styles.detailText}>
+                      {open.interpretation.text}
+                    </Text>
+                  ) : (
+                    <Text style={styles.detailFeedback}>
+                      {open.expired
+                        ? 'Not interpreted within 12 hours.'
+                        : 'Not interpreted.'}
+                    </Text>
+                  )}
+                  {open.interpretation?.feedback ? (
+                    <Text style={styles.detailFeedback}>
+                      {open.interpretation.feedback}
+                    </Text>
+                  ) : null}
+                </View>
+              );
+            })()}
+            {open.interpretation?.verdict !== 'pass' ? (
+              <View style={styles.detailBox}>
+                <Text style={styles.detailNote}>
                   This reading did not count toward graduation.
                 </Text>
-              ) : null}
-            </View>
+              </View>
+            ) : null}
+            {open.canContest || open.contest ? (
+              <ContestBox
+                reading={open}
+                onContested={reading => {
+                  setOpen(reading);
+                  queryClient.invalidateQueries({ queryKey: queryKeys.readings });
+                }}
+              />
+            ) : null}
             {open.ratings ? (
               <View style={styles.detailBox}>
                 <Text style={styles.boxLabel}>Satisfaction</Text>
@@ -272,13 +405,52 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   detailClue: {
-    marginTop: hp(6),
     color: COLORS.gold,
     fontFamily: CLUE_FONT,
-    fontSize: font(36),
-    letterSpacing: 6,
-    textAlign: 'center',
+    fontSize: font(30),
+    letterSpacing: 5,
+    textAlign: 'right',
   },
+  // A label and its value side by side in one frame.
+  inlineRow: { flexDirection: 'row', alignItems: 'center', gap: wp(10) },
+  verdictBadge: {
+    paddingVertical: 3,
+    paddingHorizontal: wp(8),
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  badgePass: { borderColor: 'rgba(232, 213, 138, 0.5)' },
+  badgeFail: { borderColor: 'rgba(226, 160, 154, 0.5)' },
+  verdictBadgeText: {
+    fontSize: font(11),
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  detailNote: { color: COLORS.muted, fontSize: font(14) },
+  contestInput: {
+    minHeight: hp(110),
+    marginTop: hp(10),
+    paddingHorizontal: wp(12),
+    paddingVertical: hp(10),
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(217, 199, 126, 0.45)',
+    color: COLORS.cream,
+    fontSize: font(15),
+    lineHeight: font(21),
+  },
+  contestError: { marginTop: hp(8), color: '#E2A09A', fontSize: font(13) },
+  contestButton: {
+    minHeight: 44,
+    marginTop: hp(12),
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 22,
+    backgroundColor: '#D9C77E',
+  },
+  contestButtonText: { color: '#172016', fontSize: font(15), fontWeight: '700' },
+  disabled: { opacity: 0.45 },
   detailQuestion: {
     marginTop: hp(6),
     color: COLORS.cream,
@@ -318,13 +490,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
-  // The row to the day's notes: opens them.
-  dayRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: wp(10),
-  },
-  dayRowText: { marginTop: hp(4), color: COLORS.cream, fontSize: font(16) },
+  dayRowText: { color: COLORS.cream, fontSize: font(16) },
   dayRowHint: { marginTop: 2, color: COLORS.muted, fontSize: font(13) },
   pressed: { opacity: 0.75 },
 });

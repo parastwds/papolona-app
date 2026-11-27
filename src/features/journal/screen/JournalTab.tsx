@@ -41,7 +41,6 @@ import {
   JournalEntrySource as EntrySource,
   NftSeries,
   PromptAllowance,
-  PromptOption,
   Reading,
   ProbationProgress,
   createJournalEntry,
@@ -66,7 +65,7 @@ import MonthTile from '../component/MonthTile';
 import AppBottomModal from '@/components/AppBottomModal';
 import ReadingRating from '../component/ReadingRating';
 import ReadingTimeLeft from '../component/ReadingTimeLeft';
-import CluePrompt, { promptsLeftText, splitDraft } from '../component/CluePrompt';
+import CluePrompt, { promptsLeftText } from '../component/CluePrompt';
 import { probationNext, probationShort } from '@/features/home/probation';
 import { PENDING_ID_PREFIX, useJournalCache } from '../journalCache';
 import { JournalDay, dayTitle, formatTime, groupByDay } from '../journalDays';
@@ -485,12 +484,13 @@ const JournalTab = () => {
       status => status && { ...status, prompts: allowance },
     );
   };
-  // The member picked the split they prefer: it starts their interpretation.
-  const onChooseSplit = (option: PromptOption) => {
+  // The member confirmed a suggestion, adopted or edited: it goes into the
+  // interpretation field (after anything already written), ready to submit.
+  const onConfirmSuggestion = (text: string) => {
     setSheet(null);
     setDraft(current =>
       current.trim() ? `${current.trimEnd()}
-${splitDraft(option)}` : splitDraft(option),
+${text}` : text,
     );
     setSpokeInterpretation(false);
     openComposer('text');
@@ -1206,66 +1206,13 @@ ${splitDraft(option)}` : splitDraft(option),
                 >
                   <Text style={styles.linkText}>Keep it as it is</Text>
                 </Pressable>
-              ) : (
-                <>
-                  {/* A fail with attempts left may be reviewed and resubmitted. */}
-                  {canResubmit(shownReading) ? (
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={() => startResubmit(shownReading)}
-                      style={({ pressed }) => [
-                        styles.primaryButton,
-                        styles.drawButton,
-                        pressed && styles.pressed,
-                      ]}
-                    >
-                      <Text style={styles.primaryButtonText}>
-                        REVIEW AND RESUBMIT
-                      </Text>
-                    </Pressable>
-                  ) : null}
-                  {/* No daily limit: the next question can follow straight away. */}
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => startNewReading(shownReading)}
-                    style={({ pressed }) => [
-                      canResubmit(shownReading)
-                        ? styles.secondaryDrawButton
-                        : [styles.primaryButton, styles.drawButton],
-                      pressed && styles.pressed,
-                    ]}
-                  >
-                    <Text
-                      style={
-                        canResubmit(shownReading)
-                          ? styles.secondaryDrawText
-                          : styles.primaryButtonText
-                      }
-                    >
-                      START NEW READING
-                    </Text>
-                  </Pressable>
-                </>
-              )}
+              ) : null}
             </>
           ) : shownReading.expired ? (
             // Drawn but never interpreted in time.
-            <>
-              <Text style={[styles.verdictDays, styles.verdictFailText]}>
-                {EXPIRED_TEXT}
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => startNewReading(shownReading)}
-                style={({ pressed }) => [
-                  styles.primaryButton,
-                  styles.drawButton,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Text style={styles.primaryButtonText}>START NEW READING</Text>
-              </Pressable>
-            </>
+            <Text style={[styles.verdictDays, styles.verdictFailText]}>
+              {EXPIRED_TEXT}
+            </Text>
           ) : null}
         </Pressable>
       );
@@ -1309,6 +1256,52 @@ ${splitDraft(option)}` : splitDraft(option),
             )}
           </Pressable>
         </View>
+      </View>
+    );
+  };
+
+  // What next, once today's reading is judged (or its time ran out): under the
+  // notes, so the member journals their conclusions before the next question.
+  // A fail with attempts left may be reviewed and resubmitted instead.
+  const renderNextReading = () => {
+    if (!shownReading || awaitingInterpretation) return null;
+    if (!shownReading.interpretation && !shownReading.expired) return null;
+    const resubmittable =
+      !!shownReading.interpretation && canResubmit(shownReading);
+    return (
+      <View style={styles.nextReading}>
+        {resubmittable ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => startResubmit(shownReading)}
+            style={({ pressed }) => [
+              styles.primaryButton,
+              styles.drawButton,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.primaryButtonText}>REVIEW AND RESUBMIT</Text>
+          </Pressable>
+        ) : null}
+        {/* No daily limit: the next question can follow straight away. */}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => startNewReading(shownReading)}
+          style={({ pressed }) => [
+            resubmittable
+              ? styles.secondaryDrawButton
+              : [styles.primaryButton, styles.drawButton],
+            pressed && styles.pressed,
+          ]}
+        >
+          <Text
+            style={
+              resubmittable ? styles.secondaryDrawText : styles.primaryButtonText
+            }
+          >
+            START NEW READING
+          </Text>
+        </Pressable>
       </View>
     );
   };
@@ -1429,6 +1422,7 @@ ${splitDraft(option)}` : splitDraft(option),
               done: judged?.verdict === 'pass',
             })}
           </View>
+          {renderNextReading()}
         </View>
         {isMember ? (
           <View style={[styles.box, styles.seriesBox]}>
@@ -1678,7 +1672,7 @@ ${splitDraft(option)}` : splitDraft(option),
             reading={shownReading}
             prompts={prompts}
             onPrompted={onPrompted}
-            onChoose={onChooseSplit}
+            onConfirm={onConfirmSuggestion}
             onClose={() => setSheet(null)}
             opensAt={promptOpensAt ?? undefined}
             autoAsk={autoPromptId === shownReading.id}
@@ -2152,6 +2146,8 @@ const styles = StyleSheet.create({
   // The main thing on the block: full width, two lines tall, in larger type.
   askField: { paddingTop: hp(12), paddingBottom: hp(10) },
   drawButton: { height: 48, marginTop: hp(10), borderRadius: 24 },
+  // Under the notes, at the foot of the day's card.
+  nextReading: { marginTop: hp(8) },
   // Beside REVIEW AND RESUBMIT: moving on is the quieter choice.
   secondaryDrawButton: {
     height: 48,
