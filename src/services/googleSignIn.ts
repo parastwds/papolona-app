@@ -34,7 +34,11 @@ function getConfiguredClient() {
       throw new Error('Google sign-in is not set up in this build.');
     }
     // The Web client ID is the audience the backend checks the ID token against.
-    google.GoogleSignin.configure({ webClientId });
+    google.GoogleSignin.configure({
+      webClientId,
+      // iOS needs its own OAuth client; Android finds its client by package name and SHA-1.
+      iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    });
     configured = true;
   }
   return google;

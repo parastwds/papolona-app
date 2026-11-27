@@ -28,7 +28,12 @@
       }
     ],
     "expo-image",
-    "@react-native-google-signin/google-signin",
+    [
+      "@react-native-google-signin/google-signin",
+      {
+        "iosUrlScheme": "com.googleusercontent.apps.706425046060-8mtastnmonpdci08pd1753clfhhu7l29"
+      }
+    ],
     "expo-video"
   ],
   "android": {
