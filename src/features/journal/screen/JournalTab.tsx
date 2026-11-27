@@ -45,6 +45,7 @@ import {
   Reading,
   ProbationProgress,
   createJournalEntry,
+  formatPennies,
   generateClueString,
   interpretReading,
 } from '@/services/session';
@@ -55,6 +56,7 @@ import {
   useProbation,
   useReadings,
   useSeriesList,
+  useWallet,
 } from '@/services/queries';
 import { queryKeys } from '@/services/queryKeys';
 import { SCREENS } from '@/constants/screens';
@@ -156,6 +158,8 @@ const JournalTab = () => {
   // Three across the section, which is 90% of the screen wide.
   const { width: screenWidth } = useWindowDimensions();
   const tileWidth = Math.floor((screenWidth * 0.9 - EMBLEM_GAP * 2) / 3) - 1;
+  // Papolona pennies: what a reading costs, and what the member has.
+  const wallet = useWallet();
   // The series today's judged reading belonged to, as the judge left it.
   const [judgedSeries, setJudgedSeries] = useState<NftSeries | null>(null);
   const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>('idle');
@@ -584,6 +588,8 @@ ${text}` : text,
     setStatusMessage('');
     try {
       const result = await generateClueString(asked);
+      // Paid in pennies.
+      queryClient.invalidateQueries({ queryKey: queryKeys.penniesAll });
       const sealedWith = { clue: result.clue, generatedAt: result.generatedAt };
       editEntries(pageEntries =>
         pageEntries.map(item =>
@@ -843,7 +849,7 @@ ${text}` : text,
             style={[styles.promptFlash, { opacity: promptFlash }]}
           >
             <Text style={styles.promptFlashText}>
-              {promptsLeftText(prompts)}
+              {promptsLeftText(prompts, wallet.data?.prices.cluePrompt)}
             </Text>
             <Text style={styles.promptFlashHint}>
               Best to work without them. Tap your clue if you need one.
@@ -1237,6 +1243,20 @@ ${text}` : text,
       <View>
         {renderDayHead(null)}
         {renderClueTiles(null)}
+        {/* Each reading is paid in pennies. */}
+        {wallet.data ? (
+          <Pressable
+            accessibilityRole="link"
+            onPress={() => navigation.navigate(SCREENS.wallet)}
+            hitSlop={6}
+            style={({ pressed }) => [styles.pennyHint, pressed && styles.pressed]}
+          >
+            <Text style={styles.pennyHintText}>
+              A reading costs {formatPennies(wallet.data.prices.reading)} · you
+              have {formatPennies(wallet.data.balance)}
+            </Text>
+          </Pressable>
+        ) : null}
         {/* One field and one button: the field grows as the question is typed. */}
         <View style={styles.askRow}>
           <View style={[styles.inputBox, styles.askField]}>
@@ -2320,6 +2340,8 @@ const styles = StyleSheet.create({
   },
   threadList: {},
   unfinishedCount: { color: COLORS.muted, fontSize: font(15) },
+  pennyHint: { alignSelf: 'flex-start', marginTop: hp(6), marginBottom: hp(8) },
+  pennyHintText: { color: COLORS.faint, fontSize: font(12) },
   unfinishedNote: {
     marginBottom: hp(12),
     color: COLORS.muted,

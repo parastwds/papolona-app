@@ -27,6 +27,8 @@ export const SCREENS = {
   purchases: 'Purchases',
   // Profile: a gift to Papolona.
   donate: 'Donate',
+  // Papolona pennies: the balance, the daily bonus, packs and history.
+  wallet: 'Wallet',
 
   // Discover
   pyramidArtStory: 'PyramidArtStory',

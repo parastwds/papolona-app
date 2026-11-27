@@ -104,15 +104,22 @@ const MembershipPicker = ({
       : unchanged
       ? 'Your current membership'
       : `${current ? 'Switch to' : 'Choose'} ${choice.title}`;
-  const note = !paid
-    ? choice.id === 'collector'
-      ? 'No monthly price: keep Collector by meeting one of the terms above. Demo payments: nobody is charged.'
-      : 'Free: no monthly price and no terms to meet.'
-    : mode === 'change' && !unchanged
-    ? `Switching charges the first month (${membershipPrice(
-        choice,
-      )}) again, even if you had it before. Demo payment: nobody is charged.`
-    : 'Billed monthly; each switch to a paid membership is charged again. Demo payment: nobody is charged.';
+  // Paid in Papolona pennies. A Creator starts provisional: free until their
+  // first Level 1 conversion makes them full and starts the monthly price.
+  const note =
+    choice.id === 'creator' && !unchanged
+      ? `You start as a provisional Creator: Single, Twin and Level 1 readings, free. Converting your first Level 1 series into an NFT makes you a full Creator and starts the monthly price (${membershipPrice(
+          choice,
+        )}). If you were a full Creator before, the first month is charged in pennies now.`
+      : !paid
+      ? choice.id === 'collector'
+        ? 'No monthly price: keep Collector by meeting one of the terms above.'
+        : 'Free: no monthly price and no terms to meet.'
+      : mode === 'change' && !unchanged
+      ? `Switching charges the first month (${membershipPrice(
+          choice,
+        )}) in pennies again, even if you had it before.`
+      : 'Paid monthly in pennies; each switch to a paid membership is charged again.';
 
   return (
     <View>

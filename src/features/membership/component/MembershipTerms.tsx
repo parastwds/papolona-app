@@ -6,13 +6,17 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Wallet } from 'lucide-react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Coins } from 'lucide-react-native';
 
 import { font, hp, wp } from '@/utils/responsive';
+import { SCREENS } from '@/constants/screens';
+import { RootStackParamList } from '@/navigation/types';
 import { getErrorMessage } from '@/services/api';
 import {
   Membership,
-  depositToWallet,
+  PENNIES,
   formatPrice,
   payCollectorFee,
 } from '@/services/session';
@@ -32,7 +36,7 @@ const formatDate = (iso: string) =>
 
 type Props = {
   membership: Membership;
-  // The membership after a deposit or the fee.
+  // The membership after paying the fee.
   onUpdated: (membership: Membership) => void;
 };
 
@@ -40,17 +44,18 @@ type Props = {
  * What a Creator or Collector must do each period (two months) to keep their
  * membership, by when, and their wallet: a Collector pays the fee, buys a
  * member's NFT with the minimum in their wallet, or buys art worth the yearly
- * amount within 12 months; a Creator converts a series
- * (with a deposit at the start of the period). Nothing for Explorers.
- * Demo payments: nobody is charged.
+ * amount within 12 months; a Creator converts a series. Nothing for Explorers
+ * (or provisional Creators). Everything is in Papolona pennies, bought on the
+ * wallet screen.
  */
 const MembershipTerms = ({ membership, onUpdated }: Props) => {
-  const [busy, setBusy] = useState<'fee' | 'deposit' | null>(null);
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const [busy, setBusy] = useState<'fee' | null>(null);
   const [message, setMessage] = useState('');
   const standing = membership.standing;
   if (!standing?.required) return null;
 
-  const currency = standing.currency ?? membership.wallet?.currency ?? 'EUR';
+  const currency = standing.currency ?? membership.wallet?.currency ?? PENNIES;
   const money = (amountCents: number) => formatPrice({ amountCents, currency });
   const balance = membership.wallet?.balanceCents ?? standing.walletCents ?? 0;
   const isCollector = standing.type === 'collector';
@@ -58,15 +63,11 @@ const MembershipTerms = ({ membership, onUpdated }: Props) => {
     ? Math.max(0, (standing.minWalletCents ?? 0) - balance)
     : standing.depositCents ?? 0;
 
-  const run = async (kind: 'fee' | 'deposit') => {
-    setBusy(kind);
+  const payFee = async () => {
+    setBusy('fee');
     setMessage('');
     try {
-      onUpdated(
-        kind === 'fee'
-          ? await payCollectorFee()
-          : await depositToWallet(depositCents),
-      );
+      onUpdated(await payCollectorFee());
     } catch (error) {
       setMessage(
         getErrorMessage(error, 'That did not go through. Please try again.'),
@@ -98,7 +99,7 @@ const MembershipTerms = ({ membership, onUpdated }: Props) => {
                   )} or more within 12 months, which covers those 12 months.`
                 : ''
             }`
-          : `Every ${standing.periodDays} days, convert at least one completed series into an NFT. Deposit funds at the start of the period, then choose which series to convert.`}
+          : `Every ${standing.periodDays} days, convert at least one completed series into an NFT.`}
       </Text>
       <Text style={styles.text}>
         If the period ends without this, your membership reverts to Explorer.
@@ -106,8 +107,8 @@ const MembershipTerms = ({ membership, onUpdated }: Props) => {
       </Text>
 
       <View style={styles.wallet}>
-        <Wallet size={18} color={GOLD} strokeWidth={1.6} />
-        <Text style={styles.walletText}>Wallet balance</Text>
+        <Coins size={18} color={GOLD} strokeWidth={1.6} />
+        <Text style={styles.walletText}>Your pennies</Text>
         <Text style={styles.walletAmount}>{money(balance)}</Text>
       </View>
       {isCollector && standing.artYearTargetCents ? (
@@ -127,7 +128,7 @@ const MembershipTerms = ({ membership, onUpdated }: Props) => {
         >
           {standing.walletOk
             ? 'Your wallet holds the minimum.'
-            : `Add ${money(depositCents)} in funds to reach the minimum.`}
+            : `Add ${money(depositCents)} to reach the minimum.`}
         </Text>
       ) : null}
 
@@ -136,7 +137,7 @@ const MembershipTerms = ({ membership, onUpdated }: Props) => {
           <Pressable
             accessibilityRole="button"
             disabled={busy !== null}
-            onPress={() => run('fee')}
+            onPress={payFee}
             style={({ pressed }) => [styles.button, pressed && styles.pressed]}
           >
             {busy === 'fee' ? (
@@ -148,35 +149,20 @@ const MembershipTerms = ({ membership, onUpdated }: Props) => {
             )}
           </Pressable>
         ) : null}
-        {depositCents > 0 ? (
-          <Pressable
-            accessibilityRole="button"
-            disabled={busy !== null}
-            onPress={() => run('deposit')}
-            style={({ pressed }) => [
-              styles.button,
-              isCollector && styles.buttonQuiet,
-              pressed && styles.pressed,
-            ]}
-          >
-            {busy === 'deposit' ? (
-              <ActivityIndicator color={isCollector ? GOLD : ON_GOLD} />
-            ) : (
-              <Text
-                style={[
-                  styles.buttonText,
-                  isCollector && styles.buttonTextQuiet,
-                ]}
-              >
-                {`Deposit ${money(depositCents)} into your wallet`}
-              </Text>
-            )}
-          </Pressable>
-        ) : null}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => navigation.navigate(SCREENS.wallet)}
+          style={({ pressed }) => [
+            styles.button,
+            isCollector && styles.buttonQuiet,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Text style={[styles.buttonText, isCollector && styles.buttonTextQuiet]}>
+            Buy pennies
+          </Text>
+        </Pressable>
       </View>
-      {membership.demoPayments ? (
-        <Text style={styles.note}>Demo payment: nobody is charged.</Text>
-      ) : null}
       {message ? (
         <Text style={[styles.note, styles.warn]}>{message}</Text>
       ) : null}

@@ -15,6 +15,7 @@ import {
   Bell,
   Camera,
   CircleHelp,
+  Coins,
   CreditCard,
   Heart,
   ShoppingBag,
@@ -377,6 +378,11 @@ const ProfileTab = () => {
               onPress={() => navigation.navigate(SCREENS.purchases)}
             />
             <View style={styles.menuDivider} />
+            <AppMenuItem
+              title="Papolona pennies"
+              icon={Coins}
+              onPress={() => navigation.navigate(SCREENS.wallet)}
+            />            <View style={styles.menuDivider} />
             <AppMenuItem
               title="Billing info"
               icon={CreditCard}

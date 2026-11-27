@@ -422,8 +422,12 @@ export type Membership = {
   standing?: Standing;
   // Set once, when the member was just moved back to Explorer: the membership they lost.
   demotedFrom?: MembershipTypeId | null;
-  // The member's wallet (demo payments only for now).
+  // The user's Papolona pennies (currency PNY).
   wallet?: { balanceCents: number; currency: string };
+  // 'provisional' until a Creator's first Level 1 conversion, then 'full'; null otherwise.
+  creatorStage?: 'provisional' | 'full' | null;
+  // A Collector, invited now and then to start creating.
+  creatorInvite?: boolean;
   // The one the questionnaire's cohort suggests.
   suggestedType?: MembershipTypeId;
   probation: ProbationProgress;
@@ -561,7 +565,8 @@ export type Purchase = {
     | 'publish'
     | 'wallet_deposit'
     | 'collector_fee'
-    | 'donation';
+    | 'donation'
+    | 'penny_pack';
   amountCents: number;
   currency: string;
   createdAt: string;
@@ -648,15 +653,6 @@ export async function donate(amountCents: number) {
   return result.payment;
 }
 
-/** Puts money into the member's wallet (demo). Resolves to the updated membership. */
-export async function depositToWallet(amountCents: number) {
-  const result = await authenticatedRequest<{ membership: Membership }>(
-    '/membership/wallet',
-    { method: 'POST', body: JSON.stringify({ amountCents }) },
-  );
-  return result.membership;
-}
-
 /** Pays the Collector fee for the current period (demo). Resolves to the updated membership. */
 export async function payCollectorFee() {
   const result = await authenticatedRequest<{ membership: Membership }>(
@@ -688,8 +684,17 @@ export const membershipPrice = (
         currency: t.currency,
       })} / month`;
 
-/** "$10" or "$10.50" in the given currency. */
+// Papolona pennies: the app's own currency (1 penny = 1 cent). Every price in the
+// app is in pennies; only penny packs are priced in real money.
+export const PENNIES = 'PNY';
+
+/** "9,000 pennies" (or "1 penny"). */
+export const formatPennies = (pennies: number) =>
+  `${pennies.toLocaleString('en')} ${pennies === 1 ? 'penny' : 'pennies'}`;
+
+/** "9,000 pennies" for a price in pennies; "$10" or "$10.50" in a real currency (penny packs). */
 export function formatPrice({ amountCents, currency }: Price) {
+  if (currency === PENNIES) return formatPennies(amountCents);
   return new Intl.NumberFormat('en', {
     style: 'currency',
     currency,
@@ -908,11 +913,93 @@ export async function unpublishSeries(id: string) {
  * POC ecosystem. Keeps the member active.
  */
 export async function convertSeries(id: string, poc: boolean) {
-  const result = await authenticatedRequest<{ series: NftSeries }>(
-    `/series/${encodeURIComponent(id)}/convert`,
-    { method: 'POST', body: JSON.stringify({ poc }) },
-  );
+  const result = await authenticatedRequest<{
+    series: NftSeries;
+    // A provisional Creator's first Level 1 conversion made them a full Creator.
+    creatorConfirmed?: boolean;
+  }>(`/series/${encodeURIComponent(id)}/convert`, {
+    method: 'POST',
+    body: JSON.stringify({ poc }),
+  });
   return result.series;
+}
+
+// ── Papolona pennies ──────────────────────────────────────────────────────────
+
+export type PennyPack = {
+  id: string;
+  pennies: number;
+  // Its price in real money (the one real-money purchase).
+  priceCents: number;
+  currency: string;
+  bonusPercent: number;
+};
+
+export type Wallet = {
+  balance: number;
+  dailyBonus: { amount: number; available: boolean; nextAt: string | null };
+  // What the everyday actions cost, in pennies.
+  prices: { reading: number; cluePrompt: number; messageRequest: number };
+  packs: PennyPack[];
+  demoPayments: boolean;
+};
+
+export type PennyReason =
+  | 'welcome'
+  | 'daily_bonus'
+  | 'pack'
+  | 'reading'
+  | 'clue_prompt'
+  | 'message_request'
+  | 'conversion'
+  | 'membership'
+  | 'collector_fee'
+  | 'stone'
+  | 'donation'
+  | 'nft_purchase'
+  | 'bid_hold'
+  | 'bid_refund'
+  | 'nft_sale'
+  | 'refund'
+  | 'migration';
+
+export type PennyTransaction = {
+  id: string;
+  // + earned, − spent.
+  amount: number;
+  reason: PennyReason;
+  balanceAfter: number;
+  createdAt: string;
+};
+
+export function fetchWallet() {
+  return authenticatedRequest<Wallet>('/pennies');
+}
+
+export function fetchPennyHistory(before?: string) {
+  const query = before ? `?before=${encodeURIComponent(before)}` : '';
+  return authenticatedRequest<{
+    transactions: PennyTransaction[];
+    nextBefore: string | null;
+  }>(`/pennies/history${query}`);
+}
+
+/** Claims today's bonus pennies. Resolves to the updated wallet. */
+export async function claimDailyBonus() {
+  const result = await authenticatedRequest<{ claimed: number; wallet: Wallet }>(
+    '/pennies/daily-bonus',
+    { method: 'POST' },
+  );
+  return result.wallet;
+}
+
+/** Buys a penny pack with real money (demo). Resolves to the updated wallet. */
+export async function buyPennyPack(packId: string) {
+  const result = await authenticatedRequest<{ wallet: Wallet }>('/pennies/packs', {
+    method: 'POST',
+    body: JSON.stringify({ packId }),
+  });
+  return result.wallet;
 }
 
 // A marketplace listing: an NFT an active member sells. feeCents and sellerProceedsCents are only there

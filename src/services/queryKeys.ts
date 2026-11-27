@@ -7,6 +7,10 @@ export const queryKeys = {
   currentUser: ['users', 'me'] as const,
   probation: ['users', 'me', 'probation'] as const,
   membership: ['membership'] as const,
+  // Papolona pennies: the balance and what things cost, and the history.
+  wallet: ['pennies', 'wallet'] as const,
+  pennyHistory: ['pennies', 'history'] as const,
+  penniesAll: ['pennies'] as const,
   // The billing info every payment uses.
   billing: ['users', 'me', 'billing'] as const,
   // Everything the user paid for.

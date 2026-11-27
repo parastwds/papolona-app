@@ -15,7 +15,6 @@ import { Maximize2 } from 'lucide-react-native';
 
 import AppBottomModal from '@/components/AppBottomModal';
 import AppButton from '@/components/AppButton';
-import BillingOnFile, { useHasBilling } from '@/components/BillingOnFile';
 import TabBackground from '@/components/TabBackground';
 import { SCREENS } from '@/constants/screens';
 import { RootStackParamList } from '@/navigation/types';
@@ -24,6 +23,8 @@ import { useListing } from '@/services/queries';
 import { queryKeys } from '@/services/queryKeys';
 import { buyListing, cancelListing, placeBid } from '@/services/session';
 import ScreenHeader, { GOLD } from '@/features/artwork/component/ScreenHeader';
+import MessageRequestSheet from '@/features/messages/component/MessageRequestSheet';
+import PennyBalance from '@/features/pennies/component/PennyBalance';
 import { rarityOf } from '@/features/series/artworks';
 import RarityMark from '@/features/series/component/RarityMark';
 import EmblemSet, {
@@ -47,22 +48,19 @@ const formatDate = (iso: string) =>
     year: 'numeric',
   });
 
-/** "120" or "120.50" from cents, for the bid field. */
-const dollarsText = (cents: number) =>
-  cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2);
-
-/** Cents from what was typed in the bid field ("$1,250.5" → 125050), or null. */
-const parseDollars = (text: string) => {
-  const n = Number(text.replace(/[$,\s]/g, ''));
-  return Number.isFinite(n) && n > 0 ? Math.round(n * 100) : null;
+/** Whole pennies typed in the bid field ("12,500" → 12500), or null. */
+const parsePennies = (text: string) => {
+  const n = Number(text.replace(/[,\s]/g, ''));
+  return Number.isInteger(n) && n > 0 ? n : null;
 };
 
 /**
  * One NFT for sale: the emblem, what it is, who sells it and its price.
  * Papolona offers it to Collectors first: during its Collectors' auction they
  * bid (each bid beating the highest) and the highest bid wins when it closes.
- * Without bids it then opens to everyone, who can buy it outright (demo
- * payment) and it moves to their Gallery. The seller sees their share and the
+ * Without bids it then opens to everyone, who can buy it outright in pennies
+ * and it moves to their Gallery. A bid holds the bidder's pennies until they are
+ * outbid. The seller sees their share and the
  * leading bid, and can take it off sale while nobody has bid.
  */
 const ListingDetail = ({ navigation, route }: Props) => {
@@ -70,6 +68,8 @@ const ListingDetail = ({ navigation, route }: Props) => {
   const queryClient = useQueryClient();
   const query = useListing(id);
   const [zoomed, setZoomed] = useState(false);
+  // Writing to the seller: a message request.
+  const [messaging, setMessaging] = useState(false);
   // The sheet open over the listing: buying outright, or placing a bid.
   const [sheet, setSheet] = useState<'buy' | 'bid' | null>(null);
   const confirming = sheet !== null;
@@ -77,17 +77,22 @@ const ListingDetail = ({ navigation, route }: Props) => {
   const [bidText, setBidText] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
-  const { ready: hasBilling } = useHasBilling();
+  // Pennies change hands: the balance shown everywhere.
+  const refreshPennies = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.penniesAll });
+    queryClient.invalidateQueries({ queryKey: queryKeys.membership });
+  };
 
   const bid = async () => {
-    const cents = parseDollars(bidText);
-    if (busy || !hasBilling || cents === null) return;
+    const cents = parsePennies(bidText);
+    if (busy || cents === null) return;
     setBusy(true);
     setMessage('');
     try {
       const listing = await placeBid(id, cents);
       queryClient.setQueryData(queryKeys.marketListing(id), listing);
       queryClient.invalidateQueries({ queryKey: queryKeys.marketAll });
+      refreshPennies();
       setSheet(null);
       setMessage('');
     } catch (error) {
@@ -101,10 +106,11 @@ const ListingDetail = ({ navigation, route }: Props) => {
   const afterChange = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.marketAll });
     queryClient.invalidateQueries({ queryKey: queryKeys.seriesAll });
+    refreshPennies();
   };
 
   const buy = async () => {
-    if (busy || !hasBilling) return;
+    if (busy) return;
     setBusy(true);
     setMessage('');
     try {
@@ -320,7 +326,7 @@ const ListingDetail = ({ navigation, route }: Props) => {
                 title={`Bid ${minBid} or more`}
                 onPress={() => {
                   setMessage('');
-                  setBidText(dollarsText(auction.minNextBidCents));
+                  setBidText(String(auction.minNextBidCents));
                   setSheet('bid');
                 }}
                 variant="primary"
@@ -341,9 +347,45 @@ const ListingDetail = ({ navigation, route }: Props) => {
             textStyle={styles.buttonText}
           />
         )}
+        {/* A buyer can write to the NFT's owner: a message request they accept or decline. */}
+        {open && !listing.mine ? (
+          <AppButton
+            title={`Message ${listing.seller.name}`}
+            onPress={() => setMessaging(true)}
+            variant="outline"
+            style={styles.secondaryButton}
+            textStyle={styles.secondaryText}
+          />
+        ) : null}
         {message && !confirming ? (
           <Text style={[styles.error, styles.status]}>{message}</Text>
         ) : null}
+
+        <MessageRequestSheet
+          member={
+            messaging
+              ? { id: listing.seller.id, name: listing.seller.name, avatarUrl: null }
+              : null
+          }
+          initialText={`Hello ${listing.seller.name}, I'm interested in your ${rarity.label} NFT${
+            series.reference ? ` ${series.reference}` : ''
+          } on the marketplace.`}
+          onClose={() => setMessaging(false)}
+          onSent={thread => {
+            setMessaging(false);
+            navigation.navigate(SCREENS.conversation, {
+              threadId: thread.id,
+              name: thread.other.name,
+            });
+          }}
+          onExisting={threadId => {
+            setMessaging(false);
+            navigation.navigate(SCREENS.conversation, {
+              threadId,
+              name: listing.seller.name,
+            });
+          }}
+        />
 
         <AppBottomModal
           visible={sheet === 'bid'}
@@ -358,36 +400,34 @@ const ListingDetail = ({ navigation, route }: Props) => {
             {auction?.collectorsUntil
               ? ` on ${formatDate(auction.collectorsUntil)}`
               : ''}
-            , the NFT is yours and you pay your bid. It then moves to your
-            Gallery, under My NFT investments.
+            , the NFT is yours for your bid. It then moves to your Gallery,
+            under My NFT investments. Your bid holds its pennies; if someone
+            outbids you, they come back to you.
           </Text>
           <View style={styles.fee}>
             <Text style={styles.factLabel}>Your bid</Text>
             <View style={styles.bidField}>
-              <Text style={styles.priceValue}>$</Text>
               <TextInput
                 value={bidText}
                 onChangeText={setBidText}
-                keyboardType="decimal-pad"
-                accessibilityLabel="Your bid in dollars"
+                keyboardType="number-pad"
+                accessibilityLabel="Your bid in pennies"
                 style={styles.bidInput}
                 selectionColor={GOLD}
               />
+              <Text style={styles.priceValue}>pennies</Text>
             </View>
           </View>
           <Text style={styles.note}>At least {minBid}.</Text>
-          <BillingOnFile
-            onEdit={() => {
-              setSheet(null);
-              navigation.navigate(SCREENS.billingInfo);
-            }}
+          <PennyBalance
+            needed={parsePennies(bidText) ?? undefined}
+            onBuy={() => setSheet(null)}
           />
-          <Text style={styles.note}>Demo payment: nobody is charged.</Text>
           {message ? <Text style={styles.error}>{message}</Text> : null}
           <AppButton
             title="Place bid"
             onPress={bid}
-            disabled={busy || !hasBilling || parseDollars(bidText) === null}
+            disabled={busy || parsePennies(bidText) === null}
             loading={busy}
             variant="primary"
             style={styles.button}
@@ -411,18 +451,12 @@ const ListingDetail = ({ navigation, route }: Props) => {
             <Text style={styles.factLabel}>Price</Text>
             <Text style={styles.priceValue}>{price}</Text>
           </View>
-          <BillingOnFile
-            onEdit={() => {
-              setConfirming(false);
-              navigation.navigate(SCREENS.billingInfo);
-            }}
-          />
-          <Text style={styles.note}>Demo payment: nobody is charged.</Text>
+          <PennyBalance needed={listing.priceCents} onBuy={() => setConfirming(false)} />
           {message ? <Text style={styles.error}>{message}</Text> : null}
           <AppButton
             title={`Buy for ${price}`}
             onPress={buy}
-            disabled={busy || !hasBilling}
+            disabled={busy}
             loading={busy}
             variant="primary"
             style={styles.button}

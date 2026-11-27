@@ -1,30 +1,62 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 
 import AppBottomModal from '@/components/AppBottomModal';
-import { getErrorMessage } from '@/services/api';
+import { ApiRequestError, getErrorMessage } from '@/services/api';
 import { queryKeys } from '@/services/queryKeys';
-import { sendMessageRequest, type DmThread, type DmUser } from '@/services/session';
+import { useWallet } from '@/services/queries';
+import {
+  formatPennies,
+  sendDirectMessage,
+  sendMessageRequest,
+  type DmThread,
+  type DmUser,
+} from '@/services/session';
 import { font, hp, wp } from '@/utils/responsive';
 
 const SHEET_ARTWORK = require('@assets/onboarding_bg.png');
 
 /**
+ * The conversation a refused request points to, one already open or waiting
+ * between the two, and whether they are already talking.
+ */
+const existingThreadOf = (err: unknown) => {
+  if (!(err instanceof ApiRequestError) || err.status !== 409) return null;
+  const details = err.details as { threadId?: unknown } | undefined;
+  return typeof details?.threadId === 'string'
+    ? { id: details.threadId, connected: err.code === 'ALREADY_CONNECTED' }
+    : null;
+};
+
+/**
  * A message request to a member: a first message, which they accept (then you
- * can talk) or decline.
+ * can talk) or decline. With `initialText`, the message starts written (about
+ * a listing, say). When the two already have a conversation, `onExisting`
+ * opens it instead.
  */
 const MessageRequestSheet = ({
   member,
   onClose,
   onSent,
+  initialText = '',
+  onExisting,
 }: {
   member: DmUser | null;
   onClose: () => void;
   onSent: (thread: DmThread) => void;
+  initialText?: string;
+  onExisting?: (threadId: string) => void;
 }) => {
   const queryClient = useQueryClient();
-  const [text, setText] = useState('');
+  // A message request is paid in pennies.
+  const requestPrice = useWallet().data?.prices.messageRequest;
+  const [text, setText] = useState(initialText);
+  // Each time the sheet opens, it starts from the suggested message.
+  const open = member !== null;
+  useEffect(() => {
+    if (open) setText(initialText);
+  }, [open, initialText]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const canSend = !busy && text.trim().length > 0;
@@ -43,9 +75,24 @@ const MessageRequestSheet = ({
       const thread = await sendMessageRequest(member.id, text.trim());
       queryClient.invalidateQueries({ queryKey: queryKeys.dmsAll });
       queryClient.invalidateQueries({ queryKey: queryKeys.memberProfile(member.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.penniesAll });
       setText('');
       onSent(thread);
     } catch (err) {
+      const existing = existingThreadOf(err);
+      if (existing && onExisting) {
+        try {
+          // Already talking: the message goes into that conversation. Otherwise a
+          // request is waiting either way, and the conversation shows it.
+          if (existing.connected) await sendDirectMessage(existing.id, text.trim());
+          queryClient.invalidateQueries({ queryKey: queryKeys.dmsAll });
+          setText('');
+          onExisting(existing.id);
+        } catch (sendErr) {
+          setError(getErrorMessage(sendErr, 'Could not send your message. Please try again.'));
+        }
+        return;
+      }
       setError(getErrorMessage(err, 'Could not send your request. Please try again.'));
     } finally {
       setBusy(false);
@@ -60,6 +107,7 @@ const MessageRequestSheet = ({
       <Text style={styles.body}>
         Your first message is sent as a request. Once {member?.name} accepts it,
         you can talk freely.
+        {requestPrice ? ` A request costs ${formatPennies(requestPrice)}; the messages after it are free.` : ''}
       </Text>
       <TextInput
         value={text}

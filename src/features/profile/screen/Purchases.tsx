@@ -190,6 +190,8 @@ const describe = (p: Purchase) => {
       return { title: 'Wallet deposit', text: 'Added to your wallet' };
     case 'collector_fee':
       return { title: 'Collector fee', text: 'For the current period' };
+    case 'penny_pack':
+      return { title: 'Papolona pennies', text: 'A penny pack' };
     default:
       return { title: 'Payment', text: '' };
   }
@@ -207,7 +209,7 @@ const PurchaseRow = ({ purchase }: { purchase: Purchase }) => {
       ? Gem
       : purchase.purpose === 'donation'
       ? Heart
-      : purchase.purpose === 'wallet_deposit'
+      : purchase.purpose === 'wallet_deposit' || purchase.purpose === 'penny_pack'
       ? Wallet
       : BadgeCheck;
   return (

@@ -23,7 +23,6 @@ import EmblemSet, { EmblemSetViewer } from '../component/EmblemSet';
 
 import AppBottomModal from '@/components/AppBottomModal';
 import AppButton from '@/components/AppButton';
-import BillingOnFile, { useHasBilling } from '@/components/BillingOnFile';
 import { SCREENS } from '@/constants/screens';
 import { RootStackParamList } from '@/navigation/types';
 import { getErrorMessage } from '@/services/api';
@@ -34,6 +33,7 @@ import {
   cancelListing,
   convertSeries,
   createListing,
+  formatPennies,
   formatPrice,
   publishSeries,
   unpublishSeries,
@@ -50,6 +50,7 @@ import { font, hp, wp } from '@/utils/responsive';
 import { failedTilesOf, hasEmblems, rarityOf } from '../artworks';
 import RarityMark from '../component/RarityMark';
 import { activeSummary } from '@/features/collect/component/ActiveBanner';
+import PennyBalance from '@/features/pennies/component/PennyBalance';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SeriesDetail'>;
 
@@ -120,14 +121,14 @@ const ActionRow = ({
   </Pressable>
 );
 
-/** Dollars typed by the member ("120" or "120.50") as cents, or null when it isn't a price. */
+/** Whole pennies typed by the member ("12,000"), or null when it isn't a price. */
 const toCents = (text: string) => {
-  const value = Number(text.replace(/[^0-9.]/g, ''));
-  return Number.isFinite(value) && value > 0 ? Math.round(value * 100) : null;
+  const value = Number(text.replace(/[^0-9]/g, ''));
+  return Number.isInteger(value) && value > 0 ? value : null;
 };
 
-const usd = (amountCents: number) =>
-  formatPrice({ amountCents, currency: 'USD' });
+// Prices are in Papolona pennies.
+const usd = formatPennies;
 
 /**
  * One emblem: the butterfly of a completed Triple, Hexa, Dozen or Double Dozen
@@ -145,8 +146,6 @@ const SeriesDetail = ({ navigation, route }: Props) => {
   const [zoomed, setZoomed] = useState(false);
   const [sheet, setSheet] = useState<Sheet>(null);
   const [busy, setBusy] = useState<Busy>(null);
-  // Every payment uses the billing info from the Profile tab.
-  const { ready: hasBilling } = useHasBilling();
   const [message, setMessage] = useState('');
   const [poc, setPoc] = useState(false);
   const [priceText, setPriceText] = useState('');
@@ -194,8 +193,10 @@ const SeriesDetail = ({ navigation, route }: Props) => {
       'convert',
       async () => {
         replace(await convertSeries(seriesId, poc));
-        // A conversion keeps the member active.
+        // A conversion keeps the member active (and may make a provisional
+        // Creator a full one); it is paid in pennies.
         queryClient.invalidateQueries({ queryKey: queryKeys.membership });
+        queryClient.invalidateQueries({ queryKey: queryKeys.penniesAll });
       },
       'Could not convert. Please try again.',
     );
@@ -203,7 +204,7 @@ const SeriesDetail = ({ navigation, route }: Props) => {
   const sell = () => {
     const cents = toCents(priceText);
     if (!cents) {
-      setMessage('Enter a price, such as 120.');
+      setMessage('Enter a price in pennies, such as 12000.');
       return;
     }
     run(
@@ -415,9 +416,7 @@ const SeriesDetail = ({ navigation, route }: Props) => {
                   // Starts at Papolona's recommended minimum for the level.
                   const suggested =
                     item.suggestedResalePrice ?? item.conversionPrice;
-                  setPriceText(
-                    suggested ? String(suggested.amountCents / 100) : '',
-                  );
+                  setPriceText(suggested ? String(suggested.amountCents) : '');
                   openSheet('sell');
                 }
           }
@@ -494,11 +493,6 @@ const SeriesDetail = ({ navigation, route }: Props) => {
     );
   };
 
-  const demoNote = (
-    <Text style={[subText.note, styles.sheetNote]}>
-      Demo payment: nobody is charged.
-    </Text>
-  );
   const errorNote = message ? (
     <Text style={[subText.error, styles.sheetNote]}>{message}</Text>
   ) : null;
@@ -508,6 +502,13 @@ const SeriesDetail = ({ navigation, route }: Props) => {
       ? formatPrice(item.conversionPrice)
       : null;
     const windowDays = membership.data?.active?.windowDays ?? 60;
+    // A provisional Creator's first Level 1 conversion makes them a full Creator,
+    // with their first month's fee.
+    const confirming =
+      membership.data?.creatorStage === 'provisional' && item.length === 3;
+    const creatorFee =
+      membership.data?.membershipTypes?.find(t => t.id === 'creator')?.priceCents ?? 0;
+    const total = (item.conversionPrice?.amountCents ?? 0) + (confirming ? creatorFee : 0);
     return (
       <>
         <Text accessibilityRole="header" style={styles.sheetTitle}>
@@ -554,18 +555,28 @@ const SeriesDetail = ({ navigation, route }: Props) => {
           <Text style={styles.factLabel}>Conversion</Text>
           <Text style={styles.feeValue}>{price ?? 'Not set'}</Text>
         </View>
-        <BillingOnFile
-          onEdit={() => {
-            setSheet(null);
-            navigation.navigate(SCREENS.billingInfo);
-          }}
-        />
-        {demoNote}
+        {confirming ? (
+          <>
+            <View style={styles.fee}>
+              <Text style={styles.factLabel}>Creator membership, first month</Text>
+              <Text style={styles.feeValue}>{formatPennies(creatorFee)}</Text>
+            </View>
+            <Text style={[styles.sheetText, styles.suggested]}>
+              Your first Level 1 conversion makes you a full Creator: every
+              level opens, and you can sell your NFTs.
+            </Text>
+          </>
+        ) : null}
+        <PennyBalance needed={total || undefined} onBuy={closeSheet} />
         {errorNote}
         <AppButton
-          title={price ? `Convert for ${price}` : 'Convert'}
+          title={
+            price
+              ? `Convert for ${confirming ? formatPennies(total) : price}`
+              : 'Convert'
+          }
           onPress={convert}
-          disabled={busy !== null || !hasBilling}
+          disabled={busy !== null}
           loading={busy === 'convert'}
           variant="primary"
           style={styles.publishButton}
@@ -633,23 +644,22 @@ const SeriesDetail = ({ navigation, route }: Props) => {
           </Text>
         ) : null}
         <View style={styles.priceField}>
-          <Text style={styles.currency}>$</Text>
           <TextInput
-            accessibilityLabel="Price in dollars"
+            accessibilityLabel="Price in pennies"
             value={priceText}
             onChangeText={setPriceText}
-            keyboardType="decimal-pad"
-            placeholder="120"
+            keyboardType="number-pad"
+            placeholder="12000"
             placeholderTextColor={COLORS.faint}
             style={styles.priceInput}
             maxLength={9}
           />
+          <Text style={styles.currency}>pennies</Text>
         </View>
         <View style={styles.fee}>
           <Text style={styles.factLabel}>You receive at least</Text>
           <Text style={styles.feeValue}>{proceeds ?? '—'}</Text>
         </View>
-        {demoNote}
         {errorNote}
         <AppButton
           title={cents ? `Start auction from ${usd(cents)}` : 'Start auction'}
@@ -883,7 +893,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: 'rgba(4, 10, 7, 0.55)',
   },
-  currency: { color: COLORS.muted, fontSize: font(18) },
+  currency: { color: COLORS.muted, fontSize: font(16) },
   priceInput: {
     flex: 1,
     color: COLORS.cream,

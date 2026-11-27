@@ -28,6 +28,8 @@ import {
   fetchJournalInsights,
   fetchActiveSeries,
   fetchMembership,
+  fetchWallet,
+  fetchPennyHistory,
   fetchBilling,
   fetchPurchases,
   fetchMemberGallery,
@@ -121,6 +123,28 @@ export const membershipQuery = queryOptions({
 export function useMembership(enabled = true) {
   useRefetchOnScreenFocus(membershipQuery.queryKey);
   return useQuery({ ...membershipQuery, enabled });
+}
+
+// Papolona pennies: the balance, the daily bonus, what things cost and the packs.
+export function useWallet(enabled = true) {
+  useRefetchOnScreenFocus(queryKeys.wallet);
+  return useQuery({
+    queryKey: queryKeys.wallet,
+    queryFn: fetchWallet,
+    staleTime: 0,
+    enabled,
+  });
+}
+
+// The penny history, newest first, a page at a time.
+export function usePennyHistory() {
+  return useInfiniteQuery({
+    queryKey: queryKeys.pennyHistory,
+    queryFn: ({ pageParam }) => fetchPennyHistory(pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: last => last.nextBefore ?? undefined,
+    staleTime: 0,
+  });
 }
 
 // The billing info every payment uses, and the account details to start it with.

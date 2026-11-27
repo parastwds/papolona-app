@@ -23,6 +23,8 @@ import {
 } from '@/features/series/artworks';
 import EmblemSet from '@/features/series/component/EmblemSet';
 import MembershipProgress from '../component/MembershipProgress';
+import CreatorNudge from '../component/CreatorNudge';
+import PenniesCard from '@/features/pennies/component/PenniesCard';
 import MonthDensity from '../component/MonthDensity';
 import StatsPanel from '../component/StatsPanel';
 
@@ -140,6 +142,11 @@ const HomeTab = () => {
           <Text style={styles.startButtonText}>Start new reading</Text>
           <ArrowRight size={17} color="#172016" strokeWidth={2} />
         </Pressable>
+
+        {/* Papolona pennies: the balance and today's bonus. */}
+        <PenniesCard onOpen={() => navigation.navigate(SCREENS.wallet)} />
+        {/* A Collector invited to create, or a provisional Creator's next step. */}
+        <CreatorNudge onOpenMembership={() => navigation.navigate(SCREENS.membership)} />
 
         {/* Shown until membership; members have their series in the Journal. */}
         <MembershipProgress

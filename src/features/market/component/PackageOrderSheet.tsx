@@ -3,9 +3,11 @@ import { StyleSheet, Text, TextInput, View } from 'react-native';
 
 import AppBottomModal from '@/components/AppBottomModal';
 import AppButton from '@/components/AppButton';
-import BillingOnFile, { useHasBilling } from '@/components/BillingOnFile';
+import { useHasBilling } from '@/components/BillingOnFile';
+import PennyBalance from '@/features/pennies/component/PennyBalance';
 import { getErrorMessage } from '@/services/api';
 import {
+  PENNIES,
   formatPrice,
   orderPackage,
   type Membership,
@@ -55,9 +57,9 @@ const PackageOrderSheet = ({
   pkg,
   onClose,
   onOrdered,
-  onEditBilling,
 }: Props) => {
-  const { ready: hasBilling, billing } = useHasBilling();
+  // The billing address, if saved, fills in the postal address.
+  const { billing } = useHasBilling();
   const [address, setAddress] = useState<StoneAddress>({
     recipientName: '',
     addressLine1: '',
@@ -69,7 +71,7 @@ const PackageOrderSheet = ({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const price = (amountCents: number) =>
-    formatPrice({ amountCents, currency: pkg?.currency ?? 'USD' });
+    formatPrice({ amountCents, currency: pkg?.currency ?? PENNIES });
   const missing = FIELDS.some(f => !f.optional && !address[f.key]?.trim());
 
   // Each time the sheet opens, the postal address starts as the billing address from the Profile tab.
@@ -86,7 +88,7 @@ const PackageOrderSheet = ({
   }, [pkg, billing]);
 
   const order = async () => {
-    if (busy || !pkg || !hasBilling) return;
+    if (busy || !pkg) return;
     if (missing) {
       setMessage('Fill in your name and full address.');
       return;
@@ -151,13 +153,12 @@ const PackageOrderSheet = ({
           </View>
         </>
       ) : null}
-      <BillingOnFile onEdit={onEditBilling} />
-      <Text style={styles.note}>Demo payment: nobody is charged.</Text>
+      <PennyBalance needed={pkg?.totalCents} onBuy={onClose} />
       {message ? <Text style={styles.error}>{message}</Text> : null}
       <AppButton
         title={pkg ? `Buy for ${price(pkg.totalCents)}` : 'Buy'}
         onPress={order}
-        disabled={busy || !hasBilling}
+        disabled={busy}
         loading={busy}
         variant="primary"
         style={styles.button}

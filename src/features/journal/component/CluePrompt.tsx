@@ -11,6 +11,9 @@ import {
 import { CLUE_FONT } from '@/theme/fonts';
 import { font, hp, wp } from '@/utils/responsive';
 import { ApiRequestError, getErrorMessage } from '@/services/api';
+import { useWallet } from '@/services/queries';
+import { queryKeys } from '@/services/queryKeys';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   PromptAllowance,
   PromptOption,
@@ -56,9 +59,11 @@ export const suggestionDraft = (option: PromptOption) =>
     `Combined: ${option.parts.map(p => firstSense(p.meaning)).join(', ')}.`,
   ].join('\n');
 
-/** "87 of 90 prompts left this month". */
-export const promptsLeftText = (prompts: PromptAllowance) =>
-  `${prompts.remaining} of ${prompts.limit} prompts left this month`;
+/** "87 of 90 prompts left this month · 5 pennies each". */
+export const promptsLeftText = (prompts: PromptAllowance, pennies?: number) =>
+  `${prompts.remaining} of ${prompts.limit} prompts left this month${
+    pennies ? ` · ${pennies} ${pennies === 1 ? 'penny' : 'pennies'} each` : ''
+  }`;
 
 /** "4:05": minutes and seconds left. */
 const minutesLeft = (ms: number) => {
@@ -86,6 +91,9 @@ const CluePrompt = ({
 }: CluePromptProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const queryClient = useQueryClient();
+  // What a suggestion costs, in pennies.
+  const cluePromptPrice = useWallet().data?.prices.cluePrompt;
   // The suggestion picked, and its text as the member adopts or edits it.
   const [chosen, setChosen] = useState<PromptOption | null>(null);
   const [text, setText] = useState('');
@@ -110,6 +118,8 @@ const CluePrompt = ({
     setError('');
     try {
       const result = await promptReading(reading.id);
+      // A suggestion is paid in pennies.
+      queryClient.invalidateQueries({ queryKey: queryKeys.penniesAll });
       onPrompted(result.reading, result.prompts);
     } catch (err) {
       if (err instanceof ApiRequestError && err.code === 'NO_PROMPTS_LEFT') {
@@ -232,7 +242,9 @@ const CluePrompt = ({
               : 'It is best to work without prompts: trust your own split first. When you are stuck, a prompt offers a few ways to split the clue, and you choose the one you prefer.'}
           </Text>
           {prompts ? (
-            <Text style={styles.count}>{promptsLeftText(prompts)}</Text>
+            <Text style={styles.count}>
+              {promptsLeftText(prompts, cluePromptPrice)}
+            </Text>
           ) : null}
           <View style={styles.actions}>
             <Pressable

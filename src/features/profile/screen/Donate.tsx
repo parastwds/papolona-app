@@ -17,7 +17,7 @@ import { SCREENS } from '@/constants/screens';
 import { RootStackParamList } from '@/navigation/types';
 import { getErrorMessage } from '@/services/api';
 import { queryKeys } from '@/services/queryKeys';
-import { donate, formatPrice } from '@/services/session';
+import { donate, formatPennies } from '@/services/session';
 import ProfileSubScreen, {
   SUB_COLORS,
   SubSection,
@@ -26,30 +26,27 @@ import ProfileSubScreen, {
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-// Donations are in the membership currency (provisional, like every price for now).
-const CURRENCY = 'EUR';
-const PRESETS = [500, 1000, 2500, 5000, 10000];
+// Gifts are in Papolona pennies, like everything in the app.
+const PRESETS = [100, 250, 500, 1000, 2500, 5000];
 const MIN_CENTS = 100;
 const MAX_CENTS = 1000000;
 
-const money = (amountCents: number) =>
-  formatPrice({ amountCents, currency: CURRENCY });
+const money = formatPennies;
 
-/** Whole euros typed in the field, as cents; null when it isn't an amount. */
+/** Whole pennies typed in the field; null when it isn't an amount. */
 const toCents = (text: string) => {
-  const value = Number(text.replace(',', '.'));
-  return Number.isFinite(value) && value > 0 ? Math.round(value * 100) : null;
+  const value = Number(text.replace(/[,\s]/g, ''));
+  return Number.isInteger(value) && value > 0 ? value : null;
 };
 
 /**
  * Support Papolona: a gift of any amount to the ecosystem, from anyone signed
- * in. A preset amount or one of the user's own, then a thank-you. Demo
- * payments for now: nobody is charged.
+ * in, in pennies. A preset amount or one of the user's own, then a thank-you.
  */
 const Donate = () => {
   const navigation = useNavigation<Nav>();
   const queryClient = useQueryClient();
-  const [preset, setPreset] = useState<number | null>(2500);
+  const [preset, setPreset] = useState<number | null>(500);
   const [custom, setCustom] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -66,6 +63,8 @@ const Donate = () => {
     try {
       await donate(amount);
       queryClient.invalidateQueries({ queryKey: queryKeys.purchases });
+      queryClient.invalidateQueries({ queryKey: queryKeys.penniesAll });
+      queryClient.invalidateQueries({ queryKey: queryKeys.membership });
       setGiven(amount);
     } catch (error) {
       setMessage(
@@ -96,8 +95,7 @@ const Donate = () => {
               chosen together.
             </Text>
             <Text style={[subText.note, styles.center]}>
-              Demo payment: nobody was charged. You will find it in Membership &
-              purchases.
+              You will find it in Membership & purchases.
             </Text>
             <Pressable
               accessibilityRole="button"
@@ -165,17 +163,17 @@ const Donate = () => {
           Or your own amount
         </Text>
         <View style={[styles.field, custom.trim() && styles.fieldOn]}>
-          <Text style={styles.currency}>€</Text>
           <TextInput
-            accessibilityLabel="Your own amount in euros"
+            accessibilityLabel="Your own amount in pennies"
             value={custom}
             onChangeText={setCustom}
-            keyboardType="decimal-pad"
-            placeholder="e.g. 15"
+            keyboardType="number-pad"
+            placeholder="e.g. 750"
             placeholderTextColor={SUB_COLORS.faint}
             maxLength={8}
             style={styles.input}
           />
+          <Text style={styles.currency}>pennies</Text>
         </View>
         {custom.trim() && !valid ? (
           <Text style={[subText.note, styles.warn]}>
@@ -205,9 +203,14 @@ const Donate = () => {
             </View>
           )}
         </Pressable>
-        <Text style={[subText.note, styles.center]}>
-          Demo payment: nobody is charged.
-        </Text>
+        <Pressable
+          accessibilityRole="link"
+          onPress={() => navigation.navigate(SCREENS.wallet)}
+          hitSlop={6}
+          style={({ pressed }) => [styles.more, styles.centerSelf, pressed && styles.pressed]}
+        >
+          <Text style={styles.link}>Your pennies</Text>
+        </Pressable>
         {message ? (
           <Text style={[subText.error, styles.center]}>{message}</Text>
         ) : null}
@@ -221,6 +224,7 @@ export default Donate;
 const styles = StyleSheet.create({
   pressed: { opacity: 0.8 },
   center: { textAlign: 'center' },
+  centerSelf: { alignSelf: 'center' },
   warn: { color: SUB_COLORS.red },
   more: { alignSelf: 'flex-start', minHeight: 40, justifyContent: 'center' },
   link: { color: SUB_COLORS.gold, fontSize: font(15), fontWeight: '600' },
@@ -253,7 +257,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   fieldOn: { borderColor: SUB_COLORS.gold },
-  currency: { marginRight: 8, color: SUB_COLORS.gold, fontSize: font(20) },
+  currency: { marginLeft: 8, color: SUB_COLORS.gold, fontSize: font(16) },
   input: {
     flex: 1,
     padding: 0,

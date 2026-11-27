@@ -223,7 +223,11 @@ const Membership = ({ navigation }: Props) => {
                 <BadgeCheck size={20} color={COLORS.gold} strokeWidth={1.6} />
               </View>
               <View style={styles.flex}>
-                <Text style={styles.cardTitle}>{type.title}</Text>
+                <Text style={styles.cardTitle}>
+                  {d.creatorStage === 'provisional'
+                    ? `${type.title} (provisional)`
+                    : type.title}
+                </Text>
                 <Text style={styles.cardText} numberOfLines={1}>
                   {type.tagline} · {membershipPrice(type)}
                 </Text>
@@ -250,6 +254,16 @@ const Membership = ({ navigation }: Props) => {
             </Pressable>
           )}
         </Section>
+
+        {d.creatorStage === 'provisional' ? (
+          <Section title="Become a full Creator">
+            <Text style={styles.summary}>
+              Complete a Level 1 series and convert it into an NFT. That first
+              conversion makes you a full Creator: every level opens, you can
+              sell your NFTs, and the monthly price starts with it.
+            </Text>
+          </Section>
+        ) : null}
 
         {d.standing?.required ? (
           <Section title="Your terms">

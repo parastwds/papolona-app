@@ -103,7 +103,10 @@ const SeriesBox = ({ startLocked = false }: Props) => {
   const queryClient = useQueryClient();
   const active = useActiveSeries();
   // Explorers may start singles, twins and Level 1 only.
-  const allowed = useMembership().data?.allowedSeriesLengths;
+  const membershipData = useMembership().data;
+  const allowed = membershipData?.allowedSeriesLengths;
+  // A provisional Creator reads like an Explorer until their first Level 1 NFT.
+  const provisional = membershipData?.creatorStage === 'provisional';
   const isAllowed = (length: SeriesLength) =>
     !allowed || allowed.length === 0 || allowed.includes(length);
   const [selected, setSelected] = useState<SeriesLength | null>(null);
@@ -264,8 +267,9 @@ const SeriesBox = ({ startLocked = false }: Props) => {
         </View>
         {LEVEL_CHOICES.some(c => !isAllowed(c.length)) ? (
           <Text style={styles.lockedNote}>
-            As an Explorer you can read Single, Twin and Level 1. Tap another
-            level to upgrade.
+            {provisional
+              ? 'As a provisional Creator you can read Single, Twin and Level 1. Convert your first Level 1 series to open every level.'
+              : 'As an Explorer you can read Single, Twin and Level 1. Tap another level to upgrade.'}
           </Text>
         ) : null}
         <Text style={choice ? styles.choiceAbout : styles.choiceEmpty}>
@@ -307,12 +311,14 @@ const SeriesBox = ({ startLocked = false }: Props) => {
         <View style={styles.upgrade}>
           <Lock size={22} color={ORANGE} strokeWidth={1.8} />
           <Text accessibilityRole="header" style={styles.upgradeTitle}>
-            Upgrade to read {lockedTap?.short ?? 'this level'}
+            {provisional
+              ? `Become a full Creator to read ${lockedTap?.short ?? 'this level'}`
+              : `Upgrade to read ${lockedTap?.short ?? 'this level'}`}
           </Text>
           <Text style={styles.upgradeText}>
-            Explorers can read Single, Twin and Level 1. Become a Creator or
-            Collector to read Levels 2, 3 and 4, and to convert and sell your
-            series as NFTs.
+            {provisional
+              ? 'Complete a Level 1 series and convert it into an NFT: your first Level 1 NFT makes you a full Creator, and Levels 2, 3 and 4 open.'
+              : 'Explorers can read Single, Twin and Level 1. Become a Creator or Collector to read Levels 2, 3 and 4, and to convert and sell your series as NFTs.'}
           </Text>
           <Pressable
             accessibilityRole="button"

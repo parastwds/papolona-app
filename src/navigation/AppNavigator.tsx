@@ -25,6 +25,7 @@ import PasswordReserSuccess from '@/features/auth/screens/forgot/PasswordResetSu
 import Settings from '@/features/profile/screen/settings/Settings';
 import BillingInfoScreen from '@/features/profile/screen/settings/BillingInfo';
 import Donate from '@/features/profile/screen/Donate';
+import Wallet from '@/features/pennies/screen/Wallet';
 import Purchases from '@/features/profile/screen/Purchases';
 import HelpInformation from '@/features/profile/screen/settings/HelpInformation';
 
@@ -108,6 +109,7 @@ const AppNavigator: React.FC<AppNavigatorProps> = ({
       <Stack.Screen name={SCREENS.settings} component={Settings} />
       <Stack.Screen name={SCREENS.billingInfo} component={BillingInfoScreen} />
       <Stack.Screen name={SCREENS.donate} component={Donate} />
+      <Stack.Screen name={SCREENS.wallet} component={Wallet} />
       <Stack.Screen name={SCREENS.purchases} component={Purchases} />
       <Stack.Screen
         name={SCREENS.helpInformation}

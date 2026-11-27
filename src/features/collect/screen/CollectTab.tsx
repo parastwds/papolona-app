@@ -336,7 +336,7 @@ const CollectTab = () => {
       </>
     ) : null;
 
-  // The wallet, topping it up, and a gift to Papolona.
+  // The user's pennies, buying more, and a gift to Papolona.
   const renderFooter = () => (
     <View style={styles.footer}>
       {wallet ? (
@@ -345,14 +345,14 @@ const CollectTab = () => {
           accessibilityLabel={`Balance ${formatPrice({
             amountCents: wallet.balanceCents,
             currency: wallet.currency,
-          })}. Open membership.`}
-          onPress={() => navigation.navigate(SCREENS.membership)}
+          })}. Open your pennies.`}
+          onPress={() => navigation.navigate(SCREENS.wallet)}
           style={({ pressed }) => [
             styles.footerItem,
             pressed && styles.pressed,
           ]}
         >
-          <Text style={styles.footerLabel}>Balance</Text>
+          <Text style={styles.footerLabel}>Your pennies</Text>
           <Text style={styles.footerValue}>
             {formatPrice({
               amountCents: wallet.balanceCents,
@@ -364,13 +364,13 @@ const CollectTab = () => {
       {wallet ? (
         <Pressable
           accessibilityRole="button"
-          onPress={() => navigation.navigate(SCREENS.membership)}
+          onPress={() => navigation.navigate(SCREENS.wallet)}
           style={({ pressed }) => [
             styles.footerItem,
             pressed && styles.pressed,
           ]}
         >
-          <Text style={styles.footerLink}>Top up account</Text>
+          <Text style={styles.footerLink}>Buy pennies</Text>
         </Pressable>
       ) : null}
       <Pressable

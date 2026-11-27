@@ -14,7 +14,8 @@ export const PERSIST_MAX_AGE = 24 * HOUR;
 
 // Bump when a cached response shape changes; the whole persisted cache is then discarded.
 // v2: journal readings now carry `questions` instead of `keyPoints`.
-export const CACHE_BUSTER = 'v2';
+// v3: prices moved to Papolona pennies (cached listings and series carried dollars).
+export const CACHE_BUSTER = 'v3';
 
 export const queryClient = new QueryClient({
   defaultOptions: {

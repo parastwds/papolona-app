@@ -32,6 +32,7 @@ export type RootStackParamList = {
   Settings: undefined;
   BillingInfo: undefined;
   Donate: undefined;
+  Wallet: undefined;
   Purchases: undefined;
   HelpInformation: undefined;
 
