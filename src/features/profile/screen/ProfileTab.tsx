@@ -30,6 +30,7 @@ import { SCREENS } from '@/constants/screens';
 import { font, hp, wp } from '@/utils/responsive';
 import { RootStackParamList } from '@/navigation/types';
 import CustomHeader from '@/components/CustomHeader';
+import { probationCompact } from '@/features/home/probation';
 import AppMenuItem from '../component/AppMenuItem';
 import EditProfileSheet from '../component/EditProfileSheet';
 import PhotoViewer from '@/components/PhotoViewer';
@@ -115,10 +116,10 @@ const ProfileTab = () => {
     ? membership.data?.active?.isActive
       ? `Active ${typeTitle ? `${typeTitle} ` : ''}member`
       : `${typeTitle ? `${typeTitle} ` : ''}Member`
-    : progress && progress.readingsDone >= progress.readingsRequired
+    : progress?.complete
     ? 'Apprenticeship complete'
     : progress
-    ? `Apprenticeship · ${progress.readingsDone} of ${progress.readingsRequired} readings`
+    ? `Apprentice · ${probationCompact(progress)}`
     : user.status.charAt(0).toUpperCase() + user.status.slice(1);
   // What the account holds, as label and value; null where nothing is set yet.
   const details: { label: string; value: string | null }[] = user

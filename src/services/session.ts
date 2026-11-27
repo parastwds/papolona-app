@@ -364,12 +364,25 @@ export function deleteReminder(id: string) {
   );
 }
 
+// The apprenticeship: at least `daysRequired` (28) days from sign-up, and at least `readingsRequired`
+// (30) passed readings in a multiple of `readingsStep` (3): 30, 33, 36…
 export type ProbationProgress = {
   status: string;
   // Readings the judge has passed so far.
   readingsDone: number;
+  // The minimum number of passed readings.
   readingsRequired: number;
-  // Enough passed readings (or already a member): the user can join, free.
+  readingsStep: number;
+  // The count to reach next: the minimum, or the next multiple of the step (31 → 33).
+  readingsTarget: number;
+  readingsMet: boolean;
+  // Whole days since sign-up, and the apprenticeship's length.
+  daysDone: number;
+  daysRequired: number;
+  daysMet: boolean;
+  // When the apprenticeship's days are up (ISO).
+  endsAt: string;
+  // Days and readings both met (or already a member): the user can join and choose a membership.
   complete: boolean;
 };
 

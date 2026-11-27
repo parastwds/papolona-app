@@ -40,7 +40,7 @@ const NOTIFICATION_ROWS: {
   {
     key: 'sequenceDeadline',
     title: 'Apprenticeship milestones',
-    description: 'Emails about your progress through the 28 readings.',
+    description: 'Emails about your progress through the apprenticeship.',
   },
   {
     key: 'productUpdates',

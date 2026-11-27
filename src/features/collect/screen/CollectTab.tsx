@@ -39,6 +39,7 @@ import EmblemTile, {
   useEmblemTileWidth,
 } from '@/features/series/component/EmblemTile';
 import RarityMark from '@/features/series/component/RarityMark';
+import { probationNext, probationShort } from '@/features/home/probation';
 import { font, hp } from '@/utils/responsive';
 
 /** A section's name, with how many it holds beside it. */
@@ -235,7 +236,11 @@ const CollectTab = () => {
         <Text style={styles.body}>
           {data.complete
             ? 'Your apprenticeship is complete. Join the collective, free, to start a series: each reading the judge passes reveals one tile of your artwork.'
-            : `Finish your apprenticeship first: ${data.readingsDone} of ${data.readingsRequired} readings passed. Then join the collective, free, to start collecting.`}
+            : `Finish your apprenticeship first (${probationShort(
+                data,
+              )}). ${probationNext(
+                data,
+              )} Then join the collective, free, to start collecting.`}
         </Text>
         <AppButton
           title={data.complete ? 'Join the collective' : 'Open the journal'}

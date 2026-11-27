@@ -67,6 +67,7 @@ import AppBottomModal from '@/components/AppBottomModal';
 import ReadingRating from '../component/ReadingRating';
 import ReadingTimeLeft from '../component/ReadingTimeLeft';
 import CluePrompt, { promptsLeftText, splitDraft } from '../component/CluePrompt';
+import { probationNext, probationShort } from '@/features/home/probation';
 import { PENDING_ID_PREFIX, useJournalCache } from '../journalCache';
 import { JournalDay, dayTitle, formatTime, groupByDay } from '../journalDays';
 
@@ -1050,11 +1051,11 @@ ${splitDraft(option)}` : splitDraft(option),
         )}
         {progress && progress.status !== 'member' && (
           <Text style={styles.verdictDays}>
-            {progress.readingsDone >= progress.readingsRequired
+            {progress.complete
               ? `Apprenticeship complete: ${progress.readingsDone} readings passed. Once you join, your prompts go from 90 to 30 a month.`
-              : passed
-              ? `Apprenticeship: ${progress.readingsDone} of ${progress.readingsRequired} readings passed.`
-              : `Apprenticeship stays at ${progress.readingsDone} of ${progress.readingsRequired}.`}
+              : `Apprenticeship · ${probationShort(progress)}. ${probationNext(
+                  progress,
+                )}`}
           </Text>
         )}
         {judgedSeries && judgedSeries.id === lastClue?.seriesId && (

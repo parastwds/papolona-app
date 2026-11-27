@@ -4,6 +4,8 @@ import { BadgeCheck, ChevronRight } from 'lucide-react-native';
 
 import { font, hp, wp } from '@/utils/responsive';
 import { useProbation } from '@/services/queries';
+import type { ProbationProgress } from '@/services/session';
+import { probationNext, probationRule, probationShort } from '../probation';
 
 interface MembershipProgressProps {
   // Where readings are made: the Journal tab.
@@ -12,11 +14,60 @@ interface MembershipProgressProps {
   onOpenMembership: () => void;
 }
 
+/** One labelled bar: "Days  5 of 28". */
+export const ApprenticeshipBar = ({
+  label,
+  now,
+  max,
+}: {
+  label: string;
+  now: number;
+  max: number;
+}) => (
+  <View style={styles.bar}>
+    <View style={styles.barHead}>
+      <Text style={styles.barLabel}>{label}</Text>
+      <Text style={styles.barValue}>
+        {now} of {max}
+      </Text>
+    </View>
+    <View
+      style={styles.track}
+      accessibilityRole="progressbar"
+      accessibilityLabel={label}
+      accessibilityValue={{ min: 0, max, now: Math.min(now, max) }}
+    >
+      <View
+        style={[
+          styles.fill,
+          { width: `${max > 0 ? Math.min(1, now / max) * 100 : 100}%` },
+        ]}
+      />
+    </View>
+  </View>
+);
+
+/** The apprenticeship's two measures: its days and its passed readings. */
+export const ApprenticeshipBars = ({ data }: { data: ProbationProgress }) => (
+  <View>
+    <ApprenticeshipBar
+      label="Days"
+      now={Math.min(data.daysDone, data.daysRequired)}
+      max={data.daysRequired}
+    />
+    <ApprenticeshipBar
+      label="Readings passed"
+      now={data.readingsDone}
+      max={data.readingsTarget}
+    />
+  </View>
+);
+
 /**
- * "Probation · 3 of 28 readings": how far a new user is towards membership.
- * Each interpretation the AI judge passes is one reading, one day forward.
- * Once probation is complete it leads to joining (free); members see the
- * series card instead (see Home). Hidden while it can't load.
+ * How far a new user is towards membership: the apprenticeship lasts 28 days
+ * and needs at least 30 passed readings in a multiple of 3 (30, 33, 36…).
+ * Once both are met it leads to joining and choosing a membership; members
+ * see the series card instead (see Home). Hidden while it can't load.
  */
 const MembershipProgress = ({
   onPress,
@@ -25,9 +76,7 @@ const MembershipProgress = ({
   const { data } = useProbation();
   if (!data || data.status === 'member') return null;
 
-  const { readingsDone, readingsRequired, complete } = data;
-  const done = Math.min(readingsDone, readingsRequired);
-  const remaining = readingsRequired - done;
+  const { complete } = data;
 
   return (
     <Pressable
@@ -35,7 +84,9 @@ const MembershipProgress = ({
       accessibilityLabel={
         complete
           ? 'Apprenticeship complete. Choose your membership.'
-          : `Apprenticeship: ${done} of ${readingsRequired} readings passed. Open the journal.`
+          : `Apprenticeship: ${probationShort(data)}. ${probationNext(
+              data,
+            )} Open the journal.`
       }
       onPress={complete ? onOpenMembership : onPress}
       style={({ pressed }) => [styles.section, pressed && styles.pressed]}
@@ -43,34 +94,21 @@ const MembershipProgress = ({
       <View style={styles.topRow}>
         {complete && <BadgeCheck size={20} color="#E8D58A" strokeWidth={1.6} />}
         <Text accessibilityRole="header" style={styles.title}>
-          {complete
-            ? 'Apprenticeship complete'
-            : `Apprenticeship · ${done} of ${readingsRequired} passed`}
+          {complete ? 'Apprenticeship complete' : 'Apprenticeship'}
         </Text>
         <ChevronRight size={18} color="#6F8274" strokeWidth={1.6} />
       </View>
 
-      <View
-        style={styles.track}
-        accessibilityRole="progressbar"
-        accessibilityValue={{ min: 0, max: readingsRequired, now: done }}
-      >
-        <View
-          style={[
-            styles.fill,
-            { width: `${(done / readingsRequired) * 100}%` },
-          ]}
-        />
-      </View>
+      <ApprenticeshipBars data={data} />
 
       <Text style={styles.text}>
         {complete
-          ? `You’ve passed all ${readingsRequired} readings. Choose your membership (Explorer, Creator or Collector), then receive your Sensitisation Package: initiation into the Papolona Method. As a member your prompts go from 90 to 30 a month: trust your own splits more.`
-          : done === 0
-          ? `Draw a clue in the Journal and interpret it. Each interpretation the AI judge passes is a reading; after ${readingsRequired} you’re ready for membership.`
-          : `${remaining} more ${
-              remaining === 1 ? 'reading' : 'readings'
-            } to go. Draw and interpret a clue each day to keep going.`}
+          ? `You’ve completed ${data.daysRequired} days and ${data.readingsDone} passed readings. Choose your membership (Explorer, Creator or Collector), then receive your Sensitisation Package: initiation into the Papolona Method. As a member your prompts go from 90 to 30 a month: trust your own splits more.`
+          : data.readingsDone === 0
+          ? `Draw a clue in the Journal and interpret it. Each interpretation the AI judge passes is a reading. You graduate after ${probationRule(
+              data,
+            )}.`
+          : probationNext(data)}
       </Text>
     </Pressable>
   );
@@ -92,9 +130,13 @@ const styles = StyleSheet.create({
     fontFamily: 'serif',
     fontSize: font(20),
   },
+  bar: { marginTop: hp(12) },
+  barHead: { flexDirection: 'row', justifyContent: 'space-between' },
+  barLabel: { color: '#B4B8AB', fontSize: font(13) },
+  barValue: { color: '#E8D58A', fontSize: font(13) },
   track: {
     height: 6,
-    marginTop: hp(12),
+    marginTop: hp(6),
     borderRadius: 3,
     backgroundColor: 'rgba(217, 199, 126, 0.18)',
     overflow: 'hidden',
