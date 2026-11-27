@@ -27,6 +27,7 @@ import EmblemTile, {
 } from '@/features/series/component/EmblemTile';
 import { font, hp } from '@/utils/responsive';
 import PackageOffers from '../component/PackageOffers';
+import MerchSection from '../component/MerchSection';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Marketplace'>;
 
@@ -190,6 +191,19 @@ const Marketplace = ({ navigation }: Props) => {
                 <ActivityIndicator color={GOLD} />
               )}
             </View>
+
+            {/* Papolona merchandise: demo items, previews only. */}
+            <Text
+              accessibilityRole="header"
+              style={[styles.sectionTitle, styles.packagesTitle]}
+            >
+              Merchandise
+            </Text>
+            <Text style={styles.text}>
+              Prints, posters and keepsakes from the collective. A preview: these
+              are demo items, not on sale yet.
+            </Text>
+            <MerchSection />
 
             {/* Mark Dolamore's original Enigma Prism art: none on offer yet. */}
             <Text

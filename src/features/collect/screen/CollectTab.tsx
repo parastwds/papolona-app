@@ -30,6 +30,7 @@ import {
 } from '@/services/queries';
 import { formatPrice, type Listing } from '@/services/session';
 import ActiveBanner from '../component/ActiveBanner';
+import NftDetailSheet, { type NftDetail } from '../component/NftDetailSheet';
 import { queryKeys } from '@/services/queryKeys';
 import type { NftSeries } from '@/services/session';
 import { RARITY_ORDER, hasEmblems, rarityOf } from '@/features/series/artworks';
@@ -135,16 +136,21 @@ const CollectTab = () => {
       ),
     [series.data],
   );
-  // Emblems earned in series left unfinished: kept, never convertible.
-  const unfinished = useMemo(
+  // Series left unfinished live in the Journal; the Gallery only points there.
+  const unfinishedCount = useMemo(
     () =>
       (series.data ?? []).filter(
-        s =>
-          (s.status === 'abandoned' || s.status === 'failed') &&
-          s.revealedCount > 0,
-      ),
+        s => s.status === 'abandoned' || s.status === 'failed',
+      ).length,
     [series.data],
   );
+  // The NFT whose card is open.
+  const [detail, setDetail] = useState<NftDetail | null>(null);
+  const openDetail = (d: NftDetail) => {
+    setDetail(null);
+    if (d.kind === 'sold') navigation.navigate(SCREENS.listing, { id: d.listing.id });
+    else navigation.navigate(SCREENS.seriesDetail, { seriesId: d.series.id });
+  };
   // Rarest first, each rarity under its butterfly mark.
   const groups = useMemo(
     () =>
@@ -182,24 +188,32 @@ const CollectTab = () => {
     }
   };
 
-  const ownTile = (item: NftSeries) => (
-    <EmblemTile
-      key={item.id}
-      artworkKey={item.artworkKey}
-      rarity={item.rarity}
-      length={item.length}
-      width={tileWidth}
-      note={noteFor(item)}
-      accessibilityLabel={`${rarityOf(item.rarity).label} emblem, ${
-        item.length
-      } readings${item.listing ? ', for sale' : ''}${
-        item.acquired ? ', bought' : ''
-      }. Open.`}
-      onPress={() =>
-        navigation.navigate(SCREENS.seriesDetail, { seriesId: item.id })
-      }
-    />
-  );
+  // An NFT opens its card; an emblem not yet converted opens its page.
+  const ownTile = (item: NftSeries) => {
+    const nft = item.nftEligible && isNft(item);
+    return (
+      <EmblemTile
+        key={item.id}
+        artworkKey={item.artworkKey}
+        rarity={item.rarity}
+        length={item.length}
+        width={tileWidth}
+        nft={nft}
+        note={noteFor(item)}
+        subnote={nft ? item.reference ?? undefined : undefined}
+        accessibilityLabel={`${rarityOf(item.rarity).label} ${
+          nft ? 'NFT' : 'emblem'
+        }, ${item.length} readings${item.listing ? ', for sale' : ''}${
+          item.acquired ? ', bought' : ''
+        }${item.reference ? `, reference ${item.reference}` : ''}. Open.`}
+        onPress={() =>
+          nft
+            ? setDetail({ kind: 'own', series: item })
+            : navigation.navigate(SCREENS.seriesDetail, { seriesId: item.id })
+        }
+      />
+    );
+  };
 
   const soldTile = (listing: Listing) => {
     const price = formatPrice({
@@ -213,6 +227,7 @@ const CollectTab = () => {
         rarity={listing.series.rarity}
         length={listing.series.length}
         width={tileWidth}
+        nft
         note={`Sold · ${price}`}
         subnote={soldTo(listing)}
         accessibilityLabel={`${
@@ -220,7 +235,7 @@ const CollectTab = () => {
         } NFT, sold for ${price}${
           listing.buyer ? ` to ${listing.buyer.name}` : ''
         }, open.`}
-        onPress={() => navigation.navigate(SCREENS.listing, { id: listing.id })}
+        onPress={() => setDetail({ kind: 'sold', listing })}
       />
     );
   };
@@ -406,41 +421,26 @@ const CollectTab = () => {
             <SectionTitle title="My NFT investments" count={converted.length} />
             {renderNfts()}
             {renderBought()}
-            {unfinished.length > 0 ? (
-              <>
-                <View style={styles.sectionGap} />
-                <SectionTitle
-                  title="Unfinished series"
-                  count={unfinished.length}
-                />
-                <Text style={styles.body}>
-                  The emblems you earned stay here, but an unfinished series
-                  cannot be converted into an NFT.
+            {unfinishedCount > 0 ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${unfinishedCount} unfinished series are in your Journal. Open the Journal.`}
+                onPress={() => navigation.navigate(BOTTOMTABSCREN.journal)}
+                style={({ pressed }) => [styles.noteCard, pressed && styles.pressed]}
+              >
+                <Text style={styles.noteTitle}>
+                  {`${unfinishedCount} unfinished ${
+                    unfinishedCount === 1 ? 'series is' : 'series are'
+                  } in your Journal`}
                 </Text>
-                <View style={styles.grid}>
-                  {unfinished.map(item => (
-                    <EmblemTile
-                      key={item.id}
-                      artworkKey={item.artworkKey}
-                      rarity={item.rarity}
-                      length={item.length}
-                      revealedTiles={item.revealedTiles}
-                      width={tileWidth}
-                      note={`${item.revealedCount} of ${item.length} emblems`}
-                      accessibilityLabel={`Unfinished ${
-                        rarityOf(item.rarity).label
-                      } series, ${item.revealedCount} of ${
-                        item.length
-                      } emblems. Open.`}
-                      onPress={() =>
-                        navigation.navigate(SCREENS.seriesDetail, {
-                          seriesId: item.id,
-                        })
-                      }
-                    />
-                  ))}
-                </View>
-              </>
+                <Text style={styles.noteBody}>
+                  Only completed series show here. A series left unfinished, or
+                  stopped by a failed reading, keeps its emblems in the Journal,
+                  with a placeholder where the failed reading would be. It cannot
+                  become an NFT.
+                </Text>
+                <Text style={styles.noteLink}>Open the Journal</Text>
+              </Pressable>
             ) : null}
             {sold.length > 0 ? (
               <>
@@ -457,6 +457,11 @@ const CollectTab = () => {
           </>
         )}
       </ScrollView>
+      <NftDetailSheet
+        detail={detail}
+        onClose={() => setDetail(null)}
+        onOpen={openDetail}
+      />
     </TabBackground>
   );
 };
@@ -539,5 +544,26 @@ const styles = StyleSheet.create({
   footerLabel: { color: MUTED, fontSize: font(12) },
   footerValue: { color: CREAM, fontSize: font(16), fontWeight: '600' },
   footerLink: { color: GOLD, fontSize: font(15), fontWeight: '600' },
+  noteCard: {
+    marginTop: hp(28),
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(232, 213, 138, 0.35)',
+    backgroundColor: 'rgba(11, 18, 13, 0.6)',
+  },
+  noteTitle: { color: CREAM, fontSize: font(15), fontWeight: '600' },
+  noteBody: {
+    marginTop: 6,
+    color: MUTED,
+    fontSize: font(13),
+    lineHeight: font(19),
+  },
+  noteLink: {
+    marginTop: 8,
+    color: GOLD,
+    fontSize: font(14),
+    fontWeight: '600',
+  },
   pressed: { opacity: 0.75 },
 });

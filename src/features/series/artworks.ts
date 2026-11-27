@@ -124,3 +124,19 @@ export type ReadingLevel = (typeof LEVELS)[number];
 /** A series' level from its rarity ("Level three reading"), or null for an unknown tier. */
 export const readingLevelOf = (rarity: string): ReadingLevel | null =>
   LEVELS.find(l => l.rarity === rarity) ?? null;
+
+/**
+ * The tile of a failed series' failed reading: the first one not revealed. It
+ * shows as a placeholder in the set, as the client's guide asks; none for any
+ * other series.
+ */
+export const failedTilesOf = (series: {
+  status: string;
+  length: number;
+  revealedTiles: number[];
+}) => {
+  if (series.status !== 'failed') return [];
+  const revealed = new Set(series.revealedTiles);
+  const first = Array.from({ length: series.length }, (_, i) => i).find(i => !revealed.has(i));
+  return first === undefined ? [] : [first];
+};

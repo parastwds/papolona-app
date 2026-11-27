@@ -47,7 +47,7 @@ import ProfileSubScreen, {
   subText,
 } from '@/features/profile/component/ProfileSubScreen';
 import { font, hp, wp } from '@/utils/responsive';
-import { hasEmblems, rarityOf } from '../artworks';
+import { failedTilesOf, hasEmblems, rarityOf } from '../artworks';
 import RarityMark from '../component/RarityMark';
 import { activeSummary } from '@/features/collect/component/ActiveBanner';
 
@@ -271,6 +271,7 @@ const SeriesDetail = ({ navigation, route }: Props) => {
           artworkKey={item.artworkKey}
           length={item.length}
           revealedTiles={item.revealedTiles}
+          failedTiles={failedTilesOf(item)}
           framed={false}
           maxHeight={wp(400)}
         />
@@ -286,6 +287,15 @@ const SeriesDetail = ({ navigation, route }: Props) => {
     const rarity = rarityOf(item.rarity);
     return (
       <View style={styles.facts}>
+        {item.reference ? (
+          <>
+            <View style={styles.factRow}>
+              <Text style={styles.factLabel}>Reference</Text>
+              <Text style={[styles.factValue, styles.reference]}>{item.reference}</Text>
+            </View>
+            <RowDivider />
+          </>
+        ) : null}
         <View
           accessible
           accessibilityLabel={`Category: ${rarity.label}`}
@@ -788,6 +798,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: COLORS.hairline,
   },
+  reference: { color: '#E8D58A', fontWeight: '600', letterSpacing: 1 },
   factRow: {
     minHeight: 46,
     flexDirection: 'row',

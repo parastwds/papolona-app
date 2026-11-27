@@ -14,6 +14,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -53,12 +54,18 @@ import {
   useJournalEntries,
   useProbation,
   useReadings,
+  useSeriesList,
 } from '@/services/queries';
 import { queryKeys } from '@/services/queryKeys';
 import { SCREENS } from '@/constants/screens';
 import { RootStackParamList } from '@/navigation/types';
 import SeriesBox from '@/features/series/component/SeriesBox';
-import { hasEmblems, rarityOf } from '@/features/series/artworks';
+import {
+  failedTilesOf,
+  hasEmblems,
+  rarityOf,
+} from '@/features/series/artworks';
+import EmblemTile, { EMBLEM_GAP } from '@/features/series/component/EmblemTile';
 import ActiveThreads, { DiscoveryItem } from '../component/ActiveThreads';
 import JournalCalendar from '../component/JournalCalendar';
 import MonthTile from '../component/MonthTile';
@@ -141,6 +148,14 @@ const JournalTab = () => {
   const isMember = probation.data?.status === 'member';
   // Members draw their clues inside a series, so the Journal needs to know of one.
   const activeSeries = useActiveSeries(isMember);
+  // Series left unfinished (abandoned or failed): their emblems are kept here, not in the Gallery.
+  const seriesList = useSeriesList(isMember);
+  const unfinishedSeries = (seriesList.data ?? []).filter(
+    s => s.status === 'abandoned' || s.status === 'failed',
+  );
+  // Three across the section, which is 90% of the screen wide.
+  const { width: screenWidth } = useWindowDimensions();
+  const tileWidth = Math.floor((screenWidth * 0.9 - EMBLEM_GAP * 2) / 3) - 1;
   // The series today's judged reading belonged to, as the judge left it.
   const [judgedSeries, setJudgedSeries] = useState<NftSeries | null>(null);
   const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>('idle');
@@ -1498,6 +1513,54 @@ ${text}` : text,
     </Modal>
   );
 
+  // Series left unfinished, three across: the emblems earned, and a placeholder
+  // where a failed reading stopped the series. None can become an NFT.
+  const renderUnfinished = () => {
+    if (unfinishedSeries.length === 0) return null;
+    return (
+      <View style={styles.section}>
+        <View style={styles.sectionHeadingRow}>
+          <Text accessibilityRole="header" style={styles.sectionHeading}>
+            Unfinished series
+          </Text>
+          <Text style={styles.unfinishedCount}>{unfinishedSeries.length}</Text>
+        </View>
+        <Text style={styles.unfinishedNote}>
+          The emblems you earned stay with you, but an unfinished series cannot
+          be converted into an NFT. A failed reading shows as a placeholder.
+        </Text>
+        <View style={[styles.unfinishedGrid, { columnGap: EMBLEM_GAP }]}>
+          {unfinishedSeries.map(item => {
+            const failed = failedTilesOf(item);
+            return (
+              <EmblemTile
+                key={item.id}
+                artworkKey={item.artworkKey}
+                rarity={item.rarity}
+                length={item.length}
+                revealedTiles={item.revealedTiles}
+                failedTiles={failed}
+                width={tileWidth}
+                note={item.status === 'failed' ? 'Failed' : 'Unfinished'}
+                subnote={`${item.revealedCount} of ${item.length} emblems`}
+                accessibilityLabel={`${
+                  item.status === 'failed' ? 'Failed' : 'Unfinished'
+                } ${rarityOf(item.rarity).label} series, ${
+                  item.revealedCount
+                } of ${item.length} emblems. Open.`}
+                onPress={() =>
+                  navigation.navigate(SCREENS.seriesDetail, {
+                    seriesId: item.id,
+                  })
+                }
+              />
+            );
+          })}
+        </View>
+      </View>
+    );
+  };
+
   // Every day the user journaled, newest first; tapping one opens its entries and AI reading.
   const renderThreads = () => {
     let body: React.ReactNode;
@@ -1628,6 +1691,7 @@ ${text}` : text,
           >
             {renderToday()}
             {renderCalendar()}
+            {renderUnfinished()}
             {renderThreads()}
 
             {/* <View style={styles.researchCard}>
@@ -2255,6 +2319,14 @@ const styles = StyleSheet.create({
     fontSize: font(20),
   },
   threadList: {},
+  unfinishedCount: { color: COLORS.muted, fontSize: font(15) },
+  unfinishedNote: {
+    marginBottom: hp(12),
+    color: COLORS.muted,
+    fontSize: font(13),
+    lineHeight: font(19),
+  },
+  unfinishedGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: hp(18) },
   sheetTitle: {
     marginBottom: hp(12),
     color: COLORS.cream,

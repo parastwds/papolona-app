@@ -793,6 +793,16 @@ export type PublishInfo = { price: Price; demoPayments: boolean };
 // A member's series: each passed reading reveals one tile of the grid.
 export type NftSeries = {
   id: string;
+  // e.g. "CR3-00042": the membership it was made under, its level, a running number.
+  reference?: string | null;
+  // Its latest marketplace sale, if it has changed hands.
+  lastSale?: {
+    priceCents: number;
+    currency: string;
+    soldAt: string;
+    buyer: string | null;
+    seller: string;
+  } | null;
   length: number;
   label: string;
   rows: number;

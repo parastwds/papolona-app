@@ -117,7 +117,10 @@ const CollectiveArtwork = ({ navigation }: Props) => {
         }}
         loadingMore={wall.isFetchingNextPage}
         header={
-          <WallIntro text="Every emblem is a member's completed series. Tap any thumbnail to see its readings and who made it." />
+          <WallIntro
+            labels={['TAP FOR DETAILS']}
+            text="Each emblem represents a Papolona series level reading. NFTs are framed in gold; each papolona carries its reference number."
+          />
         }
         empty={
           <WallEmpty text="Nothing here yet. Emblems members make public, and NFTs put up for sale, join the collaborative artwork." />
@@ -131,7 +134,7 @@ const CollectiveArtwork = ({ navigation }: Props) => {
       {/* TabBackground keeps clear of the top; this keeps clear of the bottom. */}
       <SafeAreaView style={styles.flex} edges={['bottom']}>
         <ScreenHeader
-          title="The collaborative artwork"
+          title="The complete artwork so far"
           onBack={() => navigation.goBack()}
         />
         <View style={styles.flex}>{renderBody()}</View>

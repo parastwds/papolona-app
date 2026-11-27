@@ -5,6 +5,7 @@ import {
   ListRenderItemInfo,
   StyleSheet,
   Text,
+  View,
 } from 'react-native';
 
 import { font, hp } from '@/utils/responsive';
@@ -64,9 +65,14 @@ const WallGrid = ({
         width={size}
         compact={compact}
         plain
+        // NFTs are framed in gold; no colour coding.
+        nft={Boolean(item.convertedAt)}
         owner={showOwner ? (item.creator ?? item.owner).name : undefined}
+        subnote={item.reference ?? undefined}
         accessibilityLabel={`${rarityOf(item.rarity).label} by ${
           (item.creator ?? item.owner).name
+        }${item.convertedAt ? ', NFT' : ''}${
+          item.reference ? `, reference ${item.reference}` : ''
         }. Open.`}
         onPress={() => onOpen(item)}
       />
@@ -109,9 +115,21 @@ export const WallEmpty = ({ text }: { text: string }) => (
   <Text style={styles.empty}>{text}</Text>
 );
 
-/** A line above the wall: what it is, in plain words. */
-export const WallIntro = ({ text }: { text: string }) => (
-  <Text style={styles.intro}>{text}</Text>
+/** A line above the wall: what it is, in plain words; and, optionally, a small-caps label row. */
+export const WallIntro = ({ text, labels }: { text: string; labels?: string[] }) => (
+  <>
+    {labels?.length ? (
+      // Each label wraps whole: on a narrow screen the second goes to its own line.
+      <View style={styles.labelRow}>
+        {labels.map((label, i) => (
+          <Text key={label} style={styles.labels}>
+            {i > 0 ? `·  ${label}` : label}
+          </Text>
+        ))}
+      </View>
+    ) : null}
+    <Text style={styles.intro}>{text}</Text>
+  </>
 );
 
 const styles = StyleSheet.create({
@@ -122,6 +140,19 @@ const styles = StyleSheet.create({
     paddingBottom: hp(32),
   },
   loading: { marginVertical: hp(12) },
+  labelRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    columnGap: 10,
+    rowGap: 2,
+    marginBottom: hp(6),
+  },
+  labels: {
+    color: GOLD,
+    fontSize: font(11),
+    fontWeight: '700',
+    letterSpacing: 1.2,
+  },
   intro: {
     marginBottom: hp(8),
     color: MUTED,

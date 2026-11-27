@@ -8,7 +8,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { Hexagon, X } from 'lucide-react-native';
+import { Hexagon, OctagonX, X } from 'lucide-react-native';
 
 import { font, hp, wp } from '@/utils/responsive';
 import { artworkFor, emblemKeyFor, gridFor } from '../artworks';
@@ -22,6 +22,8 @@ type Props = {
   revealedTiles?: number[];
   // Outlines the newest emblem (the last of revealedTiles).
   highlightLatest?: boolean;
+  // Readings that failed: a placeholder in their place (see failedTilesOf).
+  failedTiles?: number[];
   // A frame around the set; off where the set sits in a frame of its own.
   framed?: boolean;
   // The tallest the set may be: a long set (eight rows of three) then draws
@@ -41,7 +43,9 @@ const EmblemSet = ({
   highlightLatest = false,
   framed = true,
   maxHeight,
+  failedTiles,
 }: Props) => {
+  const failed = new Set(failedTiles ?? []);
   const { rows, cols, widthShare } = gridFor(length);
   const earned = revealedTiles
     ? new Set(revealedTiles)
@@ -61,7 +65,9 @@ const EmblemSet = ({
   const set = (
     <View
       accessibilityRole="image"
-      accessibilityLabel={`${earned.size} of ${length} butterfly emblems`}
+      accessibilityLabel={`${earned.size} of ${length} butterfly emblems${
+        failed.size ? `, ${failed.size} failed` : ''
+      }`}
       style={[
         styles.set,
         framed && styles.framed,
@@ -87,6 +93,15 @@ const EmblemSet = ({
                     contentFit="contain"
                     style={styles.butterfly}
                   />
+                ) : failed.has(index) ? (
+                  // A reading that failed its coherence test: a placeholder.
+                  <View style={styles.failedCell}>
+                    <OctagonX
+                      size={iconSize + 4}
+                      color="rgba(226, 160, 154, 0.85)"
+                      strokeWidth={1.5}
+                    />
+                  </View>
                 ) : (
                   <Hexagon
                     size={iconSize}
@@ -184,6 +199,16 @@ const styles = StyleSheet.create({
   cell: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   latest: { borderWidth: 1.5, borderColor: '#E8D58A', borderRadius: 6 },
   butterfly: { width: '90%', height: '90%' },
+  failedCell: {
+    width: '78%',
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(226, 160, 154, 0.5)',
+  },
   viewer: {
     flex: 1,
     alignItems: 'center',

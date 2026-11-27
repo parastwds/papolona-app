@@ -161,6 +161,14 @@ const ListingDetail = ({ navigation, route }: Props) => {
     const minBid = auction ? money(auction.minNextBidCents) : price;
 
     const facts: [string, React.ReactNode][] = [
+      ...(series.reference
+        ? ([
+            [
+              'Reference',
+              <Text style={[styles.factValue, styles.reference]}>{series.reference}</Text>,
+            ],
+          ] as [string, React.ReactNode][])
+        : []),
       [
         'Category',
         <View key="c" style={styles.factInline}>
@@ -510,6 +518,7 @@ const styles = StyleSheet.create({
   factInline: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   factLabel: { width: wp(108), color: MUTED, fontSize: font(14) },
   factValue: { flexShrink: 1, color: CREAM, fontSize: font(15) },
+  reference: { color: GOLD, fontWeight: '600', letterSpacing: 1 },
   priceValue: { color: GOLD, fontSize: font(18), fontWeight: '600' },
   body: { color: MUTED, fontSize: font(14), lineHeight: font(21) },
   status: { marginTop: hp(16) },

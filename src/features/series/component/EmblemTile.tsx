@@ -50,6 +50,10 @@ type Props = {
   revealedTiles?: number[];
   // The level in words instead of the coloured rarity mark (the collective artwork).
   plain?: boolean;
+  // Converted into an NFT: a gold frame.
+  nft?: boolean;
+  // Readings that failed, shown as placeholders.
+  failedTiles?: number[];
 };
 
 /**
@@ -69,6 +73,8 @@ const EmblemTile = ({
   compact = false,
   revealedTiles,
   plain = false,
+  nft = false,
+  failedTiles,
 }: Props) => (
   <Pressable
     accessibilityRole="imagebutton"
@@ -77,11 +83,12 @@ const EmblemTile = ({
     style={({ pressed }) => [{ width }, pressed && styles.pressed]}
   >
     {/* At least square; a longer set (three to a row) makes it taller. */}
-    <View style={[styles.frame, { minHeight: width }]}>
+    <View style={[styles.frame, nft && styles.frameNft, { minHeight: width }]}>
       <EmblemSet
         artworkKey={artworkKey}
         length={length}
         revealedTiles={revealedTiles}
+        failedTiles={failedTiles}
         framed={false}
       />
     </View>
@@ -128,6 +135,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 4,
   },
+  // A converted NFT: framed in gold, as the client's artwork shows.
+  frameNft: { borderWidth: 2, borderColor: '#D9C77E' },
 
   owner: {
     marginTop: 8,
