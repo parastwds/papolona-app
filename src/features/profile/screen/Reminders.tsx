@@ -28,6 +28,8 @@ import {
 } from '@/services/session';
 import AppMenuItem from '../component/AppMenuItem';
 import RecentNotifications from '../component/RecentNotifications';
+import ProfileAccessRequests from '@/features/members/component/ProfileAccessRequests';
+import { useProfileAccessRequests } from '@/services/queries';
 import ProfileSubScreen, {
   ComingSoon,
   GUTTER,
@@ -66,6 +68,7 @@ const Reminders = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const queryClient = useQueryClient();
+  const accessRequests = useProfileAccessRequests();
   const user = useCurrentUser();
   const reminders = useReminders();
   const zone = useSyncTimeZone();
@@ -205,6 +208,11 @@ const Reminders = () => {
         />
       }
     >
+      {accessRequests.data?.length ? (
+        <SubSection title="Requests to see your profile" bleed>
+          <ProfileAccessRequests />
+        </SubSection>
+      ) : null}
       <SubSection title="Your reminders" bleed>
         {message ? (
           <Text style={[subText.error, styles.gutter, styles.message]}>

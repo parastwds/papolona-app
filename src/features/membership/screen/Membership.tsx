@@ -38,6 +38,8 @@ import {
   type Membership as MembershipData,
 } from '@/services/session';
 import { activeSummary } from '@/features/collect/component/ActiveBanner';
+import { ApprenticeshipBars } from '@/features/home/component/MembershipProgress';
+import { probationNext, probationRule } from '@/features/home/probation';
 import MembershipPicker from '../component/MembershipPicker';
 import MembershipTerms from '../component/MembershipTerms';
 
@@ -315,31 +317,16 @@ const Membership = ({ navigation }: Props) => {
   );
 
   const renderApprentice = (d: MembershipData) => {
-    const { readingsDone, readingsRequired } = d.probation;
-    const done = Math.min(readingsDone, readingsRequired);
-    const left = readingsRequired - done;
+    const p = d.probation;
     return (
       <>
         {renderHero(
           'Membership opens after your apprenticeship',
-          `${left} more ${
-            left === 1 ? 'reading' : 'readings'
-          } to pass. Then choose Explorer, Creator or Collector.`,
+          `${probationNext(p)} Then choose Explorer, Creator or Collector.`,
         )}
-        <View
-          style={styles.track}
-          accessibilityRole="progressbar"
-          accessibilityValue={{ min: 0, max: readingsRequired, now: done }}
-        >
-          <View
-            style={[
-              styles.fill,
-              { width: `${(done / readingsRequired) * 100}%` },
-            ]}
-          />
-        </View>
+        <ApprenticeshipBars data={p} />
         <Text style={styles.trackText}>
-          {done} of {readingsRequired} readings passed
+          The apprenticeship asks for {probationRule(p)}.
         </Text>
         <Section title="Every membership includes">
           <IncludedGrid />
@@ -589,13 +576,6 @@ const styles = StyleSheet.create({
   },
   cellTitle: { color: COLORS.cream, fontSize: font(14), fontWeight: '600' },
   cellText: { marginTop: 2, color: COLORS.muted, fontSize: font(12) },
-  track: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(217, 199, 126, 0.18)',
-    overflow: 'hidden',
-  },
-  fill: { height: '100%', borderRadius: 3, backgroundColor: COLORS.goldSolid },
   trackText: { marginTop: hp(8), color: COLORS.muted, fontSize: font(13) },
   footnote: {
     marginTop: hp(18),

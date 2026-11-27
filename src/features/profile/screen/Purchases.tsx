@@ -317,9 +317,10 @@ const styles = StyleSheet.create({
   purchases: { gap: hp(12) },
   purchase: { flexDirection: 'row', alignItems: 'center', gap: wp(12) },
   terms: { marginTop: hp(16) },
+  // 48 wide, and taller for a longer set (three to a row).
   thumb: {
     width: 48,
-    height: 48,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',

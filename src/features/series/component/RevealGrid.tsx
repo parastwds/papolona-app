@@ -2,9 +2,11 @@ import React from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { Hexagon, Sparkles } from 'lucide-react-native';
 
-import { artworkFor, emblemKeyFor } from '../artworks';
+import { artworkFor, emblemKeyFor, gridFor } from '../artworks';
 
 interface RevealGridProps {
+  // The series' stored grid; only its size (rows x cols) is used: every grid
+  // is drawn three tiles wide (see gridFor).
   rows: number;
   cols: number;
   artworkKey: string;
@@ -20,13 +22,13 @@ interface RevealGridProps {
 }
 
 /**
- * A series' rows x cols grid: each reading the judge passes earns the butterfly
- * emblem in its tile (practice series light the tile gold instead); tiles still
- * to come stay covered.
+ * A series' grid, three tiles to a row: each reading the judge passes earns the
+ * butterfly emblem in its tile (practice series light the tile gold instead);
+ * tiles still to come stay covered.
  */
 const RevealGrid = ({
-  rows,
-  cols,
+  rows: storedRows,
+  cols: storedCols,
   artworkKey,
   revealedTiles,
   highlightLatest = false,
@@ -39,12 +41,16 @@ const RevealGrid = ({
   const latest = highlightLatest
     ? revealedTiles[revealedTiles.length - 1]
     : undefined;
-  const iconSize = cols >= 6 ? 10 : cols >= 4 ? 12 : 16;
+  const { rows, cols, widthShare } = gridFor(storedRows * storedCols);
+  const iconSize = 16;
 
   return (
     <View
-      // Square tiles: the grid sets the shape.
-      style={[styles.frame, { aspectRatio: cols / rows, borderRadius }]}
+      // Square tiles, three to a row; a single or twin is narrower, centred.
+      style={[
+        styles.frame,
+        { width: `${widthShare * 100}%`, aspectRatio: cols / rows, borderRadius },
+      ]}
       accessibilityRole="image"
       accessibilityLabel={`${revealed.size} of ${rows * cols} tiles revealed`}
     >
@@ -92,7 +98,7 @@ export default RevealGrid;
 
 const styles = StyleSheet.create({
   frame: {
-    width: '100%',
+    alignSelf: 'center',
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(217, 199, 126, 0.45)',

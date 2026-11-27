@@ -41,6 +41,9 @@ import SeriesDetail from '@/features/series/screen/SeriesDetail';
 import CollectiveArtwork from '@/features/artwork/screen/CollectiveArtwork';
 import WallTile from '@/features/artwork/screen/WallTile';
 import MemberGallery from '@/features/artwork/screen/MemberGallery';
+import Conversation from '@/features/messages/screen/Conversation';
+import BlockedMembers from '@/features/messages/screen/BlockedMembers';
+import MemberProfile from '@/features/members/screen/MemberProfile';
 import CommunityMap from '@/features/community/screen/CommunityMap';
 import Marketplace from '@/features/market/screen/Marketplace';
 import ListingDetail from '@/features/market/screen/ListingDetail';
@@ -133,6 +136,9 @@ const AppNavigator: React.FC<AppNavigatorProps> = ({
       />
       <Stack.Screen name={SCREENS.wallTile} component={WallTile} />
       <Stack.Screen name={SCREENS.memberGallery} component={MemberGallery} />
+      <Stack.Screen name={SCREENS.conversation} component={Conversation} />
+      <Stack.Screen name={SCREENS.blockedMembers} component={BlockedMembers} />
+      <Stack.Screen name={SCREENS.memberProfile} component={MemberProfile} />
       <Stack.Screen name={SCREENS.communityMap} component={CommunityMap} />
       <Stack.Screen name={SCREENS.marketplace} component={Marketplace} />
       <Stack.Screen name={SCREENS.listing} component={ListingDetail} />

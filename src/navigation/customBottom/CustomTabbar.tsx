@@ -6,12 +6,14 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import BookOpen from 'lucide-react-native/icons/book-open';
 import Compass from 'lucide-react-native/icons/compass';
 import House from 'lucide-react-native/icons/house';
+import MessageCircle from 'lucide-react-native/icons/message-circle';
 import UserRound from 'lucide-react-native/icons/user-round';
 import type { LucideIcon, LucideProps } from 'lucide-react-native';
 import ButterflySvg from '@assets/tabicon/butterfly.svg';
 
 import type { RootTabParamList } from '@/navigation/types';
 import EdgeFade from '@/components/EdgeFade';
+import { useDmInbox } from '@/services/queries';
 
 const TAB_BAR_HEIGHT = 66;
 // How far above the bar's top edge the fade begins.
@@ -53,6 +55,11 @@ const TAB_CONFIG: Record<TabName, TabConfig> = {
     icon: Compass,
   },
 
+  Messages: {
+    label: 'Messages',
+    icon: MessageCircle,
+  },
+
   Collect: {
     label: 'Gallery',
     icon: Butterfly,
@@ -79,6 +86,8 @@ const CustomTabBar = ({
   navigation,
 }: BottomTabBarProps) => {
   const insets = useSafeAreaInsets();
+  // Unread messages and waiting requests, on the Messages tab.
+  const unread = useDmInbox().data?.unreadCount ?? 0;
   const barBottom = Math.max(insets.bottom, 12) + 4;
   return (
     <>
@@ -122,10 +131,10 @@ const CustomTabBar = ({
                 accessibilityState={{
                   selected: isFocused,
                 }}
-                accessibilityLabel={
+                accessibilityLabel={`${
                   descriptors[route.key].options.tabBarAccessibilityLabel ??
                   config.label
-                }
+                }${routeName === 'Messages' && unread > 0 ? `, ${unread} unread` : ''}`}
                 onPress={onPress}
                 onLongPress={onLongPress}
               >
@@ -138,6 +147,11 @@ const CustomTabBar = ({
                     color={isFocused ? COLORS.active : COLORS.inactive}
                     strokeWidth={isFocused ? 1.9 : 1.6}
                   />
+                  {routeName === 'Messages' && unread > 0 ? (
+                    <View style={styles.unread}>
+                      <Text style={styles.unreadText}>{unread > 9 ? '9+' : unread}</Text>
+                    </View>
+                  ) : null}
                 </View>
 
                 <Text
@@ -210,6 +224,21 @@ const styles = StyleSheet.create({
     fontSize: 10,
     letterSpacing: 0.3,
   },
+
+  unread: {
+    position: 'absolute',
+    top: -3,
+    right: 4,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: '#E8964A',
+  },
+
+  unreadText: { color: '#120C05', fontSize: 9, fontWeight: '700' },
 
   tabLabelActive: {
     color: COLORS.active,

@@ -4,6 +4,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 
@@ -23,8 +24,8 @@ interface CluePromptProps {
   prompts?: PromptAllowance;
   // The reading as saved with its splits, and the allowance after this prompt.
   onPrompted: (reading: Reading, prompts: PromptAllowance) => void;
-  // The split the member prefers.
-  onChoose: (option: PromptOption) => void;
+  // The suggestion as the member adopted or edited it: it goes into the interpretation field.
+  onConfirm: (text: string) => void;
   onClose: () => void;
   // Device time (ms) when the split options open: five minutes after the draw.
   opensAt?: number;
@@ -36,11 +37,24 @@ interface CluePromptProps {
 export const splitLabel = (option: PromptOption) =>
   option.parts.map(p => p.part).join('-');
 
-/** The chosen split as a start for the interpretation, for the member to finish. */
-export const splitDraft = (option: PromptOption) =>
-  `${splitLabel(option)}: ${option.parts
-    .map(p => `${p.part} = ${p.meaning}`)
-    .join('; ')}. `;
+/** The first sense of a meaning: "Liter; or learner" → "Liter". */
+const firstSense = (meaning: string) =>
+  meaning.split(/;\s*or\s+/i)[0].trim().replace(/[.;,]+$/, '');
+
+/**
+ * A suggested interpretation from a split, for the member to adopt or edit:
+ * "MOV-L-IF
+ * MOV = Latin 'movere', to move; or a MOV video file
+ * L = Liter; or learner
+ * IF = English 'if', a condition or possibility
+ * Combined: Latin 'movere', to move, Liter, English 'if', a condition or possibility."
+ */
+export const suggestionDraft = (option: PromptOption) =>
+  [
+    splitLabel(option),
+    ...option.parts.map(p => `${p.part} = ${p.meaning}`),
+    `Combined: ${option.parts.map(p => firstSense(p.meaning)).join(', ')}.`,
+  ].join('\n');
 
 /** "87 of 90 prompts left this month". */
 export const promptsLeftText = (prompts: PromptAllowance) =>
@@ -57,20 +71,28 @@ const minutesLeft = (ms: number) => {
  * the sheet counts down. Tapped later it asks whether to use one (working
  * without them is best); opened by itself at five minutes it takes one at
  * once. Either way the prompt counts against the month. Then it offers a few
- * ways to split the clue as multiple choice; the member taps the split they
- * prefer and interprets it themselves.
+ * ways to split the clue as multiple choice. The member taps the one they
+ * prefer, adopts its suggested interpretation as it is or edits it, and
+ * confirms: it goes into the interpretation field, ready to submit.
  */
 const CluePrompt = ({
   reading,
   prompts,
   onPrompted,
-  onChoose,
+  onConfirm,
   onClose,
   opensAt,
   autoAsk = false,
 }: CluePromptProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  // The suggestion picked, and its text as the member adopts or edits it.
+  const [chosen, setChosen] = useState<PromptOption | null>(null);
+  const [text, setText] = useState('');
+  const choose = (option: PromptOption) => {
+    setChosen(option);
+    setText(suggestionDraft(option));
+  };
   const options = reading.prompt ?? null;
   const usedUp = !options && prompts !== undefined && prompts.remaining <= 0;
   // Ticks while the options are not open yet.
@@ -112,6 +134,58 @@ const CluePrompt = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoAsk, options, usedUp, waiting]);
 
+  // A suggestion picked: adopt it as it is, or edit it, then confirm.
+  if (options && chosen) {
+    const canConfirm = text.trim().length > 0;
+    return (
+      <View>
+        <Text accessibilityRole="header" style={styles.title}>
+          Adopt or edit
+        </Text>
+        <Text style={styles.clue}>{splitLabel(chosen)}</Text>
+        <Text style={styles.body}>
+          Papolona's suggestion for this split. Keep it as it is or change it
+          into your own words, then confirm. It goes into your interpretation,
+          where you can still change it before you submit.
+        </Text>
+        <View style={styles.editBox}>
+          <TextInput
+            value={text}
+            onChangeText={setText}
+            multiline
+            textAlignVertical="top"
+            accessibilityLabel="Suggested interpretation"
+            placeholder="Your interpretation"
+            placeholderTextColor="rgba(205, 214, 198, 0.42)"
+            style={styles.editInput}
+          />
+        </View>
+        <View style={styles.actions}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setChosen(null)}
+            style={({ pressed }) => [styles.secondary, pressed && styles.pressed]}
+          >
+            <Text style={styles.secondaryText}>Other splits</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !canConfirm }}
+            disabled={!canConfirm}
+            onPress={() => onConfirm(text.trim())}
+            style={({ pressed }) => [
+              styles.primary,
+              !canConfirm && styles.disabled,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.primaryText}>Confirm</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View>
       <Text accessibilityRole="header" style={styles.title}>
@@ -122,8 +196,8 @@ const CluePrompt = ({
       {options ? (
         <>
           <Text style={styles.body}>
-            Tap the split that speaks to you. Then say what it means to you and
-            combine the parts into one message.
+            Tap the split that speaks to you. You can adopt its suggested
+            interpretation or edit it before it goes into your interpretation.
           </Text>
           {options.map(option => (
             <Pressable
@@ -132,7 +206,7 @@ const CluePrompt = ({
               accessibilityLabel={`Split ${option.parts
                 .map(p => p.part.split('').join(' '))
                 .join(', ')}`}
-              onPress={() => onChoose(option)}
+              onPress={() => choose(option)}
               style={({ pressed }) => [styles.option, pressed && styles.pressed]}
             >
               <Text style={styles.optionSplit}>{splitLabel(option)}</Text>
@@ -266,6 +340,21 @@ const styles = StyleSheet.create({
     lineHeight: font(20),
   },
   optionPartLetters: { color: '#E8D58A', fontWeight: '700' },
+  editBox: {
+    marginTop: hp(14),
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(217, 199, 126, 0.45)',
+    backgroundColor: 'rgba(23, 32, 22, 0.7)',
+  },
+  editInput: {
+    minHeight: hp(130),
+    paddingHorizontal: wp(14),
+    paddingVertical: hp(12),
+    color: '#F1EEE0',
+    fontSize: font(15),
+    lineHeight: font(22),
+  },
   pressed: { opacity: 0.75 },
   error: { marginTop: hp(10), color: '#E2A09A', fontSize: font(13) },
 });

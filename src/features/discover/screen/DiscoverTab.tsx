@@ -15,6 +15,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { font, hp, wp } from '@/utils/responsive';
 import CustomHeader from '@/components/CustomHeader';
 import TabBackground from '@/components/TabBackground';
+import MemberSearch from '@/features/members/component/MemberSearch';
 import { SCREENS } from '@/constants/screens';
 import { RootStackParamList } from '@/navigation/types';
 import MapBanner from '@/features/community/component/MapBanner';
@@ -31,11 +32,17 @@ const MUTED = '#B4B8AB';
 // The Pyramid itself, for the story's tile.
 const PYRAMID = require('@assets/enigma_prism.jpg');
 // Four members' emblems, as a glimpse of the wall they make together.
+// Three rows of three, as every emblem grid in the app.
 const WALL_GLIMPSE = [
   'butterfly_03',
   'butterfly_07',
   'butterfly_11',
   'butterfly_14',
+  'butterfly_01',
+  'butterfly_05',
+  'butterfly_09',
+  'butterfly_12',
+  'butterfly_15',
 ];
 
 const STATS: { key: keyof CommunityStats; one: string; many: string }[] = [
@@ -130,7 +137,15 @@ const DiscoverTab = () => {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
       >
+        {/* Find a member: their profile, a message request, their readings on request. */}
+        <MemberSearch
+          onOpen={user =>
+            navigation.navigate(SCREENS.memberProfile, { userId: user.id, name: user.name })
+          }
+        />
+        <View style={styles.sectionGap} />
         <SectionTitle title="Around the world" />
         <MapBanner onPress={() => navigation.navigate(SCREENS.communityMap)} />
 
@@ -315,9 +330,10 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    padding: 10,
+    alignContent: 'center',
+    padding: 8,
   },
-  glimpseCell: { width: '50%', height: '50%', padding: 6 },
+  glimpseCell: { width: '33.33%', aspectRatio: 1, padding: 4 },
   pyramid: { width: '100%', height: '100%', transform: [{ scale: 0.86 }] },
   // A quiet box: a dark wash on the artwork and one thin edge.
   stat: {

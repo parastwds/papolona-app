@@ -10,6 +10,14 @@ import {
 } from '@tanstack/react-query';
 
 import { apiRequest } from './api';
+import {
+  fetchBlockedMembers,
+  fetchConversation,
+  fetchDmInbox,
+  fetchMemberProfile,
+  fetchProfileAccessRequests,
+  searchMembers,
+} from './session';
 import { queryKeys } from './queryKeys';
 import {
   JournalDayRange,
@@ -400,3 +408,64 @@ export function useJournalInsights(range: JournalDayRange, enabled = true) {
   return useQuery({ ...journalInsightsQuery(range), enabled });
 }
 
+
+// ── Direct messages and member profiles ─────────────────────────────────────
+
+const SECOND = 1000;
+
+// The Messages tab, kept fresh while the app is open (no push yet).
+export function useDmInbox() {
+  useRefetchOnScreenFocus(queryKeys.dmInbox);
+  return useQuery({
+    queryKey: queryKeys.dmInbox,
+    queryFn: fetchDmInbox,
+    // Fresh whenever the tab is opened, and every 20 seconds while it is.
+    staleTime: 0,
+    refetchInterval: 20 * SECOND,
+  });
+}
+
+// One conversation, polled while it is open so new messages appear.
+export function useConversation(id: string) {
+  return useQuery({
+    queryKey: queryKeys.dmConversation(id),
+    queryFn: () => fetchConversation(id),
+    refetchInterval: 4 * SECOND,
+  });
+}
+
+// Members whose name contains `q` (two letters or more).
+export function useMemberSearch(q: string) {
+  const query = q.trim();
+  return useQuery({
+    queryKey: queryKeys.dmSearch(query),
+    queryFn: () => searchMembers(query),
+    enabled: query.length >= 2,
+    staleTime: 30 * SECOND,
+  });
+}
+
+export function useBlockedMembers() {
+  return useQuery({ queryKey: queryKeys.dmBlocked, queryFn: fetchBlockedMembers });
+}
+
+export function useMemberProfile(id: string) {
+  useRefetchOnScreenFocus(queryKeys.memberProfile(id));
+  return useQuery({
+    queryKey: queryKeys.memberProfile(id),
+    queryFn: () => fetchMemberProfile(id),
+    // Access and messages change from the other side: fresh on every visit.
+    staleTime: 0,
+  });
+}
+
+// Requests to see the user's readings and NFTs, for their notifications.
+export function useProfileAccessRequests() {
+  useRefetchOnScreenFocus(queryKeys.profileAccessRequests);
+  return useQuery({
+    queryKey: queryKeys.profileAccessRequests,
+    queryFn: fetchProfileAccessRequests,
+    staleTime: 0,
+    refetchInterval: 60 * SECOND,
+  });
+}

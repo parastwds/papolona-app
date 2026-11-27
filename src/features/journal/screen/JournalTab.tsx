@@ -14,6 +14,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -41,7 +42,6 @@ import {
   JournalEntrySource as EntrySource,
   NftSeries,
   PromptAllowance,
-  PromptOption,
   Reading,
   ProbationProgress,
   createJournalEntry,
@@ -54,19 +54,26 @@ import {
   useJournalEntries,
   useProbation,
   useReadings,
+  useSeriesList,
 } from '@/services/queries';
 import { queryKeys } from '@/services/queryKeys';
 import { SCREENS } from '@/constants/screens';
 import { RootStackParamList } from '@/navigation/types';
 import SeriesBox from '@/features/series/component/SeriesBox';
-import { hasEmblems, rarityOf } from '@/features/series/artworks';
+import {
+  failedTilesOf,
+  hasEmblems,
+  rarityOf,
+} from '@/features/series/artworks';
+import EmblemTile, { EMBLEM_GAP } from '@/features/series/component/EmblemTile';
 import ActiveThreads, { DiscoveryItem } from '../component/ActiveThreads';
 import JournalCalendar from '../component/JournalCalendar';
 import MonthTile from '../component/MonthTile';
 import AppBottomModal from '@/components/AppBottomModal';
 import ReadingRating from '../component/ReadingRating';
 import ReadingTimeLeft from '../component/ReadingTimeLeft';
-import CluePrompt, { promptsLeftText, splitDraft } from '../component/CluePrompt';
+import CluePrompt, { promptsLeftText } from '../component/CluePrompt';
+import { probationNext, probationShort } from '@/features/home/probation';
 import { PENDING_ID_PREFIX, useJournalCache } from '../journalCache';
 import { JournalDay, dayTitle, formatTime, groupByDay } from '../journalDays';
 
@@ -141,6 +148,14 @@ const JournalTab = () => {
   const isMember = probation.data?.status === 'member';
   // Members draw their clues inside a series, so the Journal needs to know of one.
   const activeSeries = useActiveSeries(isMember);
+  // Series left unfinished (abandoned or failed): their emblems are kept here, not in the Gallery.
+  const seriesList = useSeriesList(isMember);
+  const unfinishedSeries = (seriesList.data ?? []).filter(
+    s => s.status === 'abandoned' || s.status === 'failed',
+  );
+  // Three across the section, which is 90% of the screen wide.
+  const { width: screenWidth } = useWindowDimensions();
+  const tileWidth = Math.floor((screenWidth * 0.9 - EMBLEM_GAP * 2) / 3) - 1;
   // The series today's judged reading belonged to, as the judge left it.
   const [judgedSeries, setJudgedSeries] = useState<NftSeries | null>(null);
   const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>('idle');
@@ -484,12 +499,13 @@ const JournalTab = () => {
       status => status && { ...status, prompts: allowance },
     );
   };
-  // The member picked the split they prefer: it starts their interpretation.
-  const onChooseSplit = (option: PromptOption) => {
+  // The member confirmed a suggestion, adopted or edited: it goes into the
+  // interpretation field (after anything already written), ready to submit.
+  const onConfirmSuggestion = (text: string) => {
     setSheet(null);
     setDraft(current =>
       current.trim() ? `${current.trimEnd()}
-${splitDraft(option)}` : splitDraft(option),
+${text}` : text,
     );
     setSpokeInterpretation(false);
     openComposer('text');
@@ -1050,11 +1066,11 @@ ${splitDraft(option)}` : splitDraft(option),
         )}
         {progress && progress.status !== 'member' && (
           <Text style={styles.verdictDays}>
-            {progress.readingsDone >= progress.readingsRequired
+            {progress.complete
               ? `Apprenticeship complete: ${progress.readingsDone} readings passed. Once you join, your prompts go from 90 to 30 a month.`
-              : passed
-              ? `Apprenticeship: ${progress.readingsDone} of ${progress.readingsRequired} readings passed.`
-              : `Apprenticeship stays at ${progress.readingsDone} of ${progress.readingsRequired}.`}
+              : `Apprenticeship · ${probationShort(progress)}. ${probationNext(
+                  progress,
+                )}`}
           </Text>
         )}
         {judgedSeries && judgedSeries.id === lastClue?.seriesId && (
@@ -1205,66 +1221,13 @@ ${splitDraft(option)}` : splitDraft(option),
                 >
                   <Text style={styles.linkText}>Keep it as it is</Text>
                 </Pressable>
-              ) : (
-                <>
-                  {/* A fail with attempts left may be reviewed and resubmitted. */}
-                  {canResubmit(shownReading) ? (
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={() => startResubmit(shownReading)}
-                      style={({ pressed }) => [
-                        styles.primaryButton,
-                        styles.drawButton,
-                        pressed && styles.pressed,
-                      ]}
-                    >
-                      <Text style={styles.primaryButtonText}>
-                        REVIEW AND RESUBMIT
-                      </Text>
-                    </Pressable>
-                  ) : null}
-                  {/* No daily limit: the next question can follow straight away. */}
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => startNewReading(shownReading)}
-                    style={({ pressed }) => [
-                      canResubmit(shownReading)
-                        ? styles.secondaryDrawButton
-                        : [styles.primaryButton, styles.drawButton],
-                      pressed && styles.pressed,
-                    ]}
-                  >
-                    <Text
-                      style={
-                        canResubmit(shownReading)
-                          ? styles.secondaryDrawText
-                          : styles.primaryButtonText
-                      }
-                    >
-                      START NEW READING
-                    </Text>
-                  </Pressable>
-                </>
-              )}
+              ) : null}
             </>
           ) : shownReading.expired ? (
             // Drawn but never interpreted in time.
-            <>
-              <Text style={[styles.verdictDays, styles.verdictFailText]}>
-                {EXPIRED_TEXT}
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => startNewReading(shownReading)}
-                style={({ pressed }) => [
-                  styles.primaryButton,
-                  styles.drawButton,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Text style={styles.primaryButtonText}>START NEW READING</Text>
-              </Pressable>
-            </>
+            <Text style={[styles.verdictDays, styles.verdictFailText]}>
+              {EXPIRED_TEXT}
+            </Text>
           ) : null}
         </Pressable>
       );
@@ -1308,6 +1271,52 @@ ${splitDraft(option)}` : splitDraft(option),
             )}
           </Pressable>
         </View>
+      </View>
+    );
+  };
+
+  // What next, once today's reading is judged (or its time ran out): under the
+  // notes, so the member journals their conclusions before the next question.
+  // A fail with attempts left may be reviewed and resubmitted instead.
+  const renderNextReading = () => {
+    if (!shownReading || awaitingInterpretation) return null;
+    if (!shownReading.interpretation && !shownReading.expired) return null;
+    const resubmittable =
+      !!shownReading.interpretation && canResubmit(shownReading);
+    return (
+      <View style={styles.nextReading}>
+        {resubmittable ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => startResubmit(shownReading)}
+            style={({ pressed }) => [
+              styles.primaryButton,
+              styles.drawButton,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.primaryButtonText}>REVIEW AND RESUBMIT</Text>
+          </Pressable>
+        ) : null}
+        {/* No daily limit: the next question can follow straight away. */}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => startNewReading(shownReading)}
+          style={({ pressed }) => [
+            resubmittable
+              ? styles.secondaryDrawButton
+              : [styles.primaryButton, styles.drawButton],
+            pressed && styles.pressed,
+          ]}
+        >
+          <Text
+            style={
+              resubmittable ? styles.secondaryDrawText : styles.primaryButtonText
+            }
+          >
+            START NEW READING
+          </Text>
+        </Pressable>
       </View>
     );
   };
@@ -1428,6 +1437,7 @@ ${splitDraft(option)}` : splitDraft(option),
               done: judged?.verdict === 'pass',
             })}
           </View>
+          {renderNextReading()}
         </View>
         {isMember ? (
           <View style={[styles.box, styles.seriesBox]}>
@@ -1502,6 +1512,54 @@ ${splitDraft(option)}` : splitDraft(option),
       </View>
     </Modal>
   );
+
+  // Series left unfinished, three across: the emblems earned, and a placeholder
+  // where a failed reading stopped the series. None can become an NFT.
+  const renderUnfinished = () => {
+    if (unfinishedSeries.length === 0) return null;
+    return (
+      <View style={styles.section}>
+        <View style={styles.sectionHeadingRow}>
+          <Text accessibilityRole="header" style={styles.sectionHeading}>
+            Unfinished series
+          </Text>
+          <Text style={styles.unfinishedCount}>{unfinishedSeries.length}</Text>
+        </View>
+        <Text style={styles.unfinishedNote}>
+          The emblems you earned stay with you, but an unfinished series cannot
+          be converted into an NFT. A failed reading shows as a placeholder.
+        </Text>
+        <View style={[styles.unfinishedGrid, { columnGap: EMBLEM_GAP }]}>
+          {unfinishedSeries.map(item => {
+            const failed = failedTilesOf(item);
+            return (
+              <EmblemTile
+                key={item.id}
+                artworkKey={item.artworkKey}
+                rarity={item.rarity}
+                length={item.length}
+                revealedTiles={item.revealedTiles}
+                failedTiles={failed}
+                width={tileWidth}
+                note={item.status === 'failed' ? 'Failed' : 'Unfinished'}
+                subnote={`${item.revealedCount} of ${item.length} emblems`}
+                accessibilityLabel={`${
+                  item.status === 'failed' ? 'Failed' : 'Unfinished'
+                } ${rarityOf(item.rarity).label} series, ${
+                  item.revealedCount
+                } of ${item.length} emblems. Open.`}
+                onPress={() =>
+                  navigation.navigate(SCREENS.seriesDetail, {
+                    seriesId: item.id,
+                  })
+                }
+              />
+            );
+          })}
+        </View>
+      </View>
+    );
+  };
 
   // Every day the user journaled, newest first; tapping one opens its entries and AI reading.
   const renderThreads = () => {
@@ -1633,6 +1691,7 @@ ${splitDraft(option)}` : splitDraft(option),
           >
             {renderToday()}
             {renderCalendar()}
+            {renderUnfinished()}
             {renderThreads()}
 
             {/* <View style={styles.researchCard}>
@@ -1677,7 +1736,7 @@ ${splitDraft(option)}` : splitDraft(option),
             reading={shownReading}
             prompts={prompts}
             onPrompted={onPrompted}
-            onChoose={onChooseSplit}
+            onConfirm={onConfirmSuggestion}
             onClose={() => setSheet(null)}
             opensAt={promptOpensAt ?? undefined}
             autoAsk={autoPromptId === shownReading.id}
@@ -2151,6 +2210,8 @@ const styles = StyleSheet.create({
   // The main thing on the block: full width, two lines tall, in larger type.
   askField: { paddingTop: hp(12), paddingBottom: hp(10) },
   drawButton: { height: 48, marginTop: hp(10), borderRadius: 24 },
+  // Under the notes, at the foot of the day's card.
+  nextReading: { marginTop: hp(8) },
   // Beside REVIEW AND RESUBMIT: moving on is the quieter choice.
   secondaryDrawButton: {
     height: 48,
@@ -2258,6 +2319,14 @@ const styles = StyleSheet.create({
     fontSize: font(20),
   },
   threadList: {},
+  unfinishedCount: { color: COLORS.muted, fontSize: font(15) },
+  unfinishedNote: {
+    marginBottom: hp(12),
+    color: COLORS.muted,
+    fontSize: font(13),
+    lineHeight: font(19),
+  },
+  unfinishedGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: hp(18) },
   sheetTitle: {
     marginBottom: hp(12),
     color: COLORS.cream,

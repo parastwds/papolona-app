@@ -47,7 +47,7 @@ import ProfileSubScreen, {
   subText,
 } from '@/features/profile/component/ProfileSubScreen';
 import { font, hp, wp } from '@/utils/responsive';
-import { hasEmblems, rarityOf } from '../artworks';
+import { failedTilesOf, hasEmblems, rarityOf } from '../artworks';
 import RarityMark from '../component/RarityMark';
 import { activeSummary } from '@/features/collect/component/ActiveBanner';
 
@@ -271,7 +271,9 @@ const SeriesDetail = ({ navigation, route }: Props) => {
           artworkKey={item.artworkKey}
           length={item.length}
           revealedTiles={item.revealedTiles}
+          failedTiles={failedTilesOf(item)}
           framed={false}
+          maxHeight={wp(400)}
         />
       </View>
       <View style={styles.zoomHint}>
@@ -285,6 +287,15 @@ const SeriesDetail = ({ navigation, route }: Props) => {
     const rarity = rarityOf(item.rarity);
     return (
       <View style={styles.facts}>
+        {item.reference ? (
+          <>
+            <View style={styles.factRow}>
+              <Text style={styles.factLabel}>Reference</Text>
+              <Text style={[styles.factValue, styles.reference]}>{item.reference}</Text>
+            </View>
+            <RowDivider />
+          </>
+        ) : null}
         <View
           accessible
           accessibilityLabel={`Category: ${rarity.label}`}
@@ -378,7 +389,14 @@ const SeriesDetail = ({ navigation, route }: Props) => {
               : !item.convertedAt
               ? 'Convert it into an NFT to sell it'
               : item.listing
-              ? `For sale in Discover at ${usd(item.listing.priceCents)}`
+              ? item.listing.collectorsUntil &&
+                new Date(item.listing.collectorsUntil) > new Date()
+                ? `In the Collectors’ auction from ${usd(
+                    item.listing.priceCents,
+                  )}, until ${new Date(
+                    item.listing.collectorsUntil,
+                  ).toLocaleDateString([], { day: 'numeric', month: 'long' })}`
+                : `For sale in Discover at ${usd(item.listing.priceCents)}`
               : 'Private: not for sale'
           }
           action={
@@ -592,13 +610,15 @@ const SeriesDetail = ({ navigation, route }: Props) => {
     return (
       <>
         <Text accessibilityRole="header" style={styles.sheetTitle}>
-          Put it up for sale
+          Put it up for auction
         </Text>
         <Text style={styles.sheetText}>
-          It becomes public in Discover, on the marketplace and the collective
-          artwork. Anyone in Papolona can buy it; the NFT then moves to them.
-          Papolona, as your agent, shares the sale with you equally: it keeps{' '}
-          {MARKET_FEE_PERCENT}%, reinvested in the ecosystem.
+          It becomes public on the collective artwork. Papolona, as your agent,
+          first offers it to Collector members in an auction for 30 days:
+          Collectors bid from your starting price, and the highest bid wins
+          when the auction closes. If nobody bids, it opens to everyone in
+          Papolona at your price. Papolona shares the sale with you equally: it
+          keeps {MARKET_FEE_PERCENT}%, reinvested in the ecosystem.
         </Text>
         {item.suggestedResalePrice ? (
           <Text
@@ -626,13 +646,13 @@ const SeriesDetail = ({ navigation, route }: Props) => {
           />
         </View>
         <View style={styles.fee}>
-          <Text style={styles.factLabel}>You receive</Text>
+          <Text style={styles.factLabel}>You receive at least</Text>
           <Text style={styles.feeValue}>{proceeds ?? '—'}</Text>
         </View>
         {demoNote}
         {errorNote}
         <AppButton
-          title={cents ? `Sell for ${usd(cents)}` : 'Sell'}
+          title={cents ? `Start auction from ${usd(cents)}` : 'Start auction'}
           onPress={sell}
           disabled={busy !== null || belowMinimum}
           loading={busy === 'sell'}
@@ -651,7 +671,8 @@ const SeriesDetail = ({ navigation, route }: Props) => {
       </Text>
       <Text style={styles.sheetText}>
         It leaves the marketplace and stays yours, still on the collective
-        artwork. You can sell it again later.
+        artwork. You can sell it again later. Once Collectors have bid on it, it
+        stays in the auction until it closes.
       </Text>
       {errorNote}
       <AppButton
@@ -745,7 +766,8 @@ const styles = StyleSheet.create({
   // Black, as the emblems were made to be seen, with one thin edge.
   frame: {
     width: '100%',
-    aspectRatio: 1.1,
+    // At least this tall; a longer set (three to a row) makes it taller.
+    minHeight: wp(320),
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(232, 213, 138, 0.3)',
@@ -776,6 +798,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: COLORS.hairline,
   },
+  reference: { color: '#E8D58A', fontWeight: '600', letterSpacing: 1 },
   factRow: {
     minHeight: 46,
     flexDirection: 'row',

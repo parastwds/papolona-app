@@ -364,12 +364,25 @@ export function deleteReminder(id: string) {
   );
 }
 
+// The apprenticeship: at least `daysRequired` (28) days from sign-up, and at least `readingsRequired`
+// (30) passed readings in a multiple of `readingsStep` (3): 30, 33, 36…
 export type ProbationProgress = {
   status: string;
   // Readings the judge has passed so far.
   readingsDone: number;
+  // The minimum number of passed readings.
   readingsRequired: number;
-  // Enough passed readings (or already a member): the user can join, free.
+  readingsStep: number;
+  // The count to reach next: the minimum, or the next multiple of the step (31 → 33).
+  readingsTarget: number;
+  readingsMet: boolean;
+  // Whole days since sign-up, and the apprenticeship's length.
+  daysDone: number;
+  daysRequired: number;
+  daysMet: boolean;
+  // When the apprenticeship's days are up (ISO).
+  endsAt: string;
+  // Days and readings both met (or already a member): the user can join and choose a membership.
   complete: boolean;
 };
 
@@ -734,6 +747,10 @@ export type Reading = {
   // expired is then true.
   deadlineAt?: string;
   expired?: boolean;
+  // The member's contest of a judgement after all three attempts failed, and
+  // whether they may still send one (once, within 90 days).
+  contest?: { text: string; at: string } | null;
+  canContest?: boolean;
 };
 
 // One way to split a clue, offered as a prompt: its parts in order, each with
@@ -776,6 +793,16 @@ export type PublishInfo = { price: Price; demoPayments: boolean };
 // A member's series: each passed reading reveals one tile of the grid.
 export type NftSeries = {
   id: string;
+  // e.g. "CR3-00042": the membership it was made under, its level, a running number.
+  reference?: string | null;
+  // Its latest marketplace sale, if it has changed hands.
+  lastSale?: {
+    priceCents: number;
+    currency: string;
+    soldAt: string;
+    buyer: string | null;
+    seller: string;
+  } | null;
   length: number;
   label: string;
   rows: number;
@@ -813,6 +840,8 @@ export type NftSeries = {
     priceCents: number;
     currency: string;
     createdAt: string;
+    // When its Collectors' auction closes; null for listings from before auctions.
+    collectorsUntil?: string | null;
   } | null;
 };
 
@@ -901,13 +930,31 @@ export type Listing = {
   sellerProceedsCents?: number;
   // Who bought it, once sold (seller only).
   buyer?: { id: string; name: string } | null;
+  // Where it stands in its sale: first an auction for Collectors, then (without bids) open to all.
+  auction?: ListingAuction;
   series: NftSeries;
+};
+
+export type ListingAuction = {
+  // 'collectors': Collectors bid until collectorsUntil; 'open': anyone can buy it at its price.
+  phase: 'collectors' | 'open';
+  collectorsUntil: string | null;
+  bidCount: number;
+  highestBidCents: number | null;
+  // The least the next bid may be: the starting price, or 5% over the highest bid.
+  minNextBidCents: number;
+  highestBidMine: boolean;
+  // Who leads the auction (seller only).
+  highestBidder?: { id: string; name: string };
+  canBid: boolean;
+  canBuy: boolean;
 };
 
 export type ListingPage = {
   listings: Listing[];
   nextBefore: string | null;
   feePercent: number;
+  auctionDays?: number;
 };
 
 /** A page of the marketplace, newest first. */
@@ -948,7 +995,16 @@ export async function cancelListing(id: string) {
   return result.listing;
 }
 
-/** Buys a listing (demo payment): the NFT becomes the user's. */
+/** A Collector's bid in a listing's Collectors' auction. Resolves to the listing as it now stands. */
+export async function placeBid(id: string, amountCents: number) {
+  const result = await authenticatedRequest<{ listing: Listing }>(
+    `/market/listings/${encodeURIComponent(id)}/bids`,
+    { method: 'POST', body: JSON.stringify({ amountCents }) },
+  );
+  return result.listing;
+}
+
+/** Buys a listing (demo payment) once its auction closed without bids: the NFT becomes the user's. */
 export async function buyListing(id: string) {
   return authenticatedRequest<{ listing: Listing; series: NftSeries }>(
     `/market/listings/${encodeURIComponent(id)}/buy`,
@@ -1111,6 +1167,17 @@ export function rateReading(id: string, stars: number) {
   return authenticatedRequest<Reading>(
     `/clue-string/${encodeURIComponent(id)}/rating`,
     { method: 'PUT', body: JSON.stringify({ satisfaction: stars * 2 }) },
+  );
+}
+
+/**
+ * Contests the judgement on a reading that failed all three attempts: the
+ * member's case is emailed to Papolona with the reading. Once per reading.
+ */
+export function contestReading(id: string, text: string) {
+  return authenticatedRequest<Reading>(
+    `/clue-string/${encodeURIComponent(id)}/contest`,
+    { method: 'POST', body: JSON.stringify({ text }) },
   );
 }
 
@@ -1387,4 +1454,176 @@ export async function restoreSession(): Promise<boolean> {
     await clearTokens();
     return false;
   }
+}
+
+// ── Direct messages ─────────────────────────────────────────────────────────
+// A conversation starts as a message request (with a first message); once the
+// other member accepts, both can write. Either can block the other.
+
+export type DmUser = { id: string; name: string; avatarUrl: string | null };
+
+// Where a conversation stands for the signed-in user.
+export type DmState = 'connected' | 'incoming' | 'requested';
+
+export type DmThread = {
+  id: string;
+  state: DmState;
+  other: DmUser;
+  lastMessage: { text: string; createdAt: string; mine: boolean } | null;
+  lastActivityAt: string;
+  unread: number;
+  // Who has blocked whom, if anyone.
+  blocked: 'by_me' | 'by_them' | null;
+  canSend: boolean;
+};
+
+export type DmMessage = { id: string; text: string; createdAt: string; mine: boolean };
+
+export type DmInbox = {
+  conversations: DmThread[];
+  requests: DmThread[];
+  sent: DmThread[];
+  unreadCount: number;
+};
+
+export type DmConversation = {
+  thread: DmThread;
+  // Newest first.
+  messages: DmMessage[];
+  nextBefore: string | null;
+};
+
+// A member found in search, and where the user stands with them.
+export type DmSearchUser = DmUser & {
+  state: 'none' | DmState;
+  threadId: string | null;
+};
+
+export function fetchDmInbox() {
+  return authenticatedRequest<DmInbox>('/dms');
+}
+
+export async function searchMembers(q: string) {
+  const result = await authenticatedRequest<{ users: DmSearchUser[] }>(
+    `/dms/search?q=${encodeURIComponent(q)}`,
+  );
+  return result.users;
+}
+
+export function fetchConversation(id: string, before?: string) {
+  const query = before ? `?before=${encodeURIComponent(before)}` : '';
+  return authenticatedRequest<DmConversation>(
+    `/dms/${encodeURIComponent(id)}${query}`,
+  );
+}
+
+/** A message request to another member, with its first message. */
+export async function sendMessageRequest(userId: string, text: string) {
+  const result = await authenticatedRequest<{ thread: DmThread }>(
+    '/dms/requests',
+    { method: 'POST', body: JSON.stringify({ userId, text }) },
+  );
+  return result.thread;
+}
+
+export async function answerMessageRequest(id: string, accept: boolean) {
+  const result = await authenticatedRequest<{ thread: DmThread | null }>(
+    `/dms/${encodeURIComponent(id)}/${accept ? 'accept' : 'decline'}`,
+    { method: 'POST' },
+  );
+  return result.thread;
+}
+
+export async function sendDirectMessage(id: string, text: string) {
+  const result = await authenticatedRequest<{ message: DmMessage }>(
+    `/dms/${encodeURIComponent(id)}/messages`,
+    { method: 'POST', body: JSON.stringify({ text }) },
+  );
+  return result.message;
+}
+
+export async function fetchBlockedMembers() {
+  const result = await authenticatedRequest<{
+    users: (DmUser & { blockedAt: string })[];
+  }>('/dms/blocks');
+  return result.users;
+}
+
+export function blockMember(userId: string) {
+  return authenticatedRequest<{ blocked: boolean }>('/dms/blocks', {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  });
+}
+
+export function unblockMember(userId: string) {
+  return authenticatedRequest<{ blocked: boolean }>(
+    `/dms/blocks/${encodeURIComponent(userId)}`,
+    { method: 'DELETE' },
+  );
+}
+
+// ── Member profiles ─────────────────────────────────────────────────────────
+// Anyone sees a member's profile; their readings and NFTs open only once the
+// member approves the viewer's request.
+
+export type ProfileAccess = 'self' | 'approved' | 'pending' | 'denied' | 'none';
+
+export type MemberProfile = {
+  member: DmUser & {
+    bio: string;
+    country: string | null;
+    role: string;
+    joinedAt: string;
+  };
+  stats: { readings: number; emblems: number; nfts: number };
+  access: ProfileAccess;
+  dm: { state: 'none' | DmState; threadId: string | null };
+  blocked: 'by_me' | null;
+  // Only with access.
+  readings?: {
+    id: string;
+    clue: string;
+    question: string;
+    generatedAt: string;
+    coherent: boolean;
+    interpretation: string;
+  }[];
+  nfts?: NftSeries[];
+};
+
+export type ProfileAccessRequest = {
+  id: string;
+  createdAt: string;
+  viewer: DmUser;
+};
+
+export function fetchMemberProfile(id: string) {
+  return authenticatedRequest<MemberProfile>(
+    `/members/${encodeURIComponent(id)}`,
+  );
+}
+
+export async function requestProfileAccess(id: string) {
+  const result = await authenticatedRequest<{ access: ProfileAccess }>(
+    `/members/${encodeURIComponent(id)}/access`,
+    { method: 'POST' },
+  );
+  return result.access;
+}
+
+export async function fetchProfileAccessRequests() {
+  const result = await authenticatedRequest<{
+    requests: ProfileAccessRequest[];
+  }>('/members/access-requests');
+  return result.requests;
+}
+
+export function answerProfileAccess(id: string, approve: boolean) {
+  return authenticatedRequest<{ status: string }>(
+    `/members/access-requests/${encodeURIComponent(id)}/${
+      approve ? 'approve' : 'deny'
+    }`,
+    { method: 'POST' },
+  );
 }

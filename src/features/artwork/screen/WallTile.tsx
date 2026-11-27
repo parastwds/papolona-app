@@ -102,13 +102,18 @@ const WallTile = ({ navigation, route }: Props) => {
           accessibilityRole="imagebutton"
           accessibilityLabel="Open the emblems full screen"
           onPress={() => setZoomed(true)}
-          style={({ pressed }) => [styles.frame, pressed && styles.pressed]}
+          style={({ pressed }) => [
+            styles.frame,
+            tile.convertedAt && styles.frameNft,
+            pressed && styles.pressed,
+          ]}
         >
           <View style={styles.setWrap}>
             <EmblemSet
               artworkKey={tile.artworkKey}
               length={tile.length}
               framed={false}
+              maxHeight={wp(400)}
             />
           </View>
           <View style={styles.zoomHint}>
@@ -116,12 +121,20 @@ const WallTile = ({ navigation, route }: Props) => {
           </View>
         </Pressable>
         <Text style={styles.hint}>
-          Each butterfly is one reading the judge passed. Tap to see them
-          closely.
+          Each emblem represents a Papolona series level reading. Tap them to
+          see them closely.
         </Text>
 
         {/* What it is, as label and value, like an NFT's own screen. */}
         <View style={styles.facts}>
+          {tile.reference ? (
+            <>
+              <Fact label="Reference">
+                <Text style={[styles.factValue, styles.reference]}>{tile.reference}</Text>
+              </Fact>
+              <View style={styles.divider} />
+            </>
+          ) : null}
           <Fact label="Completed by" onPress={() => openGallery(maker)}>
             <Text style={styles.factValue}>{maker.name}</Text>
           </Fact>
@@ -145,6 +158,12 @@ const WallTile = ({ navigation, route }: Props) => {
           <Fact label="Readings">
             <Text style={styles.factValue}>{tile.length}</Text>
           </Fact>
+          <View style={styles.divider} />
+          <Fact label="NFT">
+            <Text style={styles.factValue}>
+              {tile.convertedAt ? `Converted ${formatDate(tile.convertedAt)}` : 'Not converted'}
+            </Text>
+          </Fact>
           {tile.completedAt ? (
             <>
               <View style={styles.divider} />
@@ -161,7 +180,7 @@ const WallTile = ({ navigation, route }: Props) => {
           The readings
         </Text>
         <Text style={styles.body}>
-          Each butterfly above is one of these readings, passed by {maker.name}.
+          Each emblem above is one of these readings, passed by {maker.name}.
         </Text>
         {readings.length === 0 ? (
           <Text style={[styles.body, styles.empty]}>
@@ -253,9 +272,12 @@ const styles = StyleSheet.create({
     paddingBottom: hp(40),
   },
   // Black, as the emblems were made to be seen, with one thin edge.
+  // An NFT, framed in gold as on the wall.
+  frameNft: { borderWidth: 2, borderColor: '#D9C77E' },
   frame: {
     width: '100%',
-    aspectRatio: 1.1,
+    // At least this tall; a longer set (three to a row) makes it taller.
+    minHeight: wp(320),
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(232, 213, 138, 0.3)',
@@ -300,6 +322,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  reference: { color: GOLD, fontWeight: '600', letterSpacing: 1 },
   factValue: { flexShrink: 1, color: CREAM, fontSize: font(15) },
   subheading: {
     marginTop: hp(24),

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -8,7 +8,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { Hexagon, X } from 'lucide-react-native';
+import { Hexagon, OctagonX, X } from 'lucide-react-native';
 
 import { font, hp, wp } from '@/utils/responsive';
 import { artworkFor, emblemKeyFor, gridFor } from '../artworks';
@@ -22,14 +22,19 @@ type Props = {
   revealedTiles?: number[];
   // Outlines the newest emblem (the last of revealedTiles).
   highlightLatest?: boolean;
+  // Readings that failed: a placeholder in their place (see failedTilesOf).
+  failedTiles?: number[];
   // A frame around the set; off where the set sits in a frame of its own.
   framed?: boolean;
+  // The tallest the set may be: a long set (eight rows of three) then draws
+  // smaller, still three wide. Leave out to let it grow lengthwise.
+  maxHeight?: number;
 };
 
 /**
- * A series' butterfly emblems, one for each reading the judge passed, laid out
- * on the series' grid (3 in a row … 24 in four rows of six). A complete set is
- * one NFT. Readings still to come show as faint hexagons.
+ * A series' butterfly emblems, one for each reading the judge passed, three to
+ * a row and as many rows as the series needs (24 is eight rows of three). A
+ * complete set is one NFT. Readings still to come show as faint hexagons.
  */
 const EmblemSet = ({
   artworkKey,
@@ -37,8 +42,11 @@ const EmblemSet = ({
   revealedTiles,
   highlightLatest = false,
   framed = true,
+  maxHeight,
+  failedTiles,
 }: Props) => {
-  const { rows, cols } = gridFor(length);
+  const failed = new Set(failedTiles ?? []);
+  const { rows, cols, widthShare } = gridFor(length);
   const earned = revealedTiles
     ? new Set(revealedTiles)
     : new Set(Array.from({ length }, (_, i) => i));
@@ -46,16 +54,27 @@ const EmblemSet = ({
     highlightLatest && revealedTiles?.length
       ? revealedTiles[revealedTiles.length - 1]
       : undefined;
-  const iconSize = cols >= 6 ? 10 : cols >= 4 ? 12 : 16;
+  const iconSize = 16;
+  // With a height cap, the set measures the width it has and sizes itself:
+  // a row of three as wide as fits, and no taller in all than maxHeight.
+  const [available, setAvailable] = useState(0);
+  const capped = maxHeight !== undefined;
+  const capWidth = capped ? (maxHeight * cols) / rows : Infinity;
+  const setWidth = Math.min(available * widthShare, capWidth);
 
-  return (
+  const set = (
     <View
       accessibilityRole="image"
-      accessibilityLabel={`${earned.size} of ${length} butterfly emblems`}
+      accessibilityLabel={`${earned.size} of ${length} butterfly emblems${
+        failed.size ? `, ${failed.size} failed` : ''
+      }`}
       style={[
         styles.set,
         framed && styles.framed,
-        { aspectRatio: cols / rows },
+        // Square cells; a single or twin is narrower, centred.
+        capped
+          ? { width: setWidth, height: (setWidth * rows) / cols }
+          : { width: `${widthShare * 100}%`, aspectRatio: cols / rows },
       ]}
     >
       {Array.from({ length: rows }, (_, r) => (
@@ -74,6 +93,15 @@ const EmblemSet = ({
                     contentFit="contain"
                     style={styles.butterfly}
                   />
+                ) : failed.has(index) ? (
+                  // A reading that failed its coherence test: a placeholder.
+                  <View style={styles.failedCell}>
+                    <OctagonX
+                      size={iconSize + 4}
+                      color="rgba(226, 160, 154, 0.85)"
+                      strokeWidth={1.5}
+                    />
+                  </View>
                 ) : (
                   <Hexagon
                     size={iconSize}
@@ -86,6 +114,16 @@ const EmblemSet = ({
           })}
         </View>
       ))}
+    </View>
+  );
+
+  if (!capped) return set;
+  return (
+    <View
+      style={styles.measure}
+      onLayout={event => setAvailable(event.nativeEvent.layout.width)}
+    >
+      {available > 0 ? set : null}
     </View>
   );
 };
@@ -107,9 +145,13 @@ export const EmblemSetViewer = ({
   onClose: () => void;
 }) => {
   const { width, height } = useWindowDimensions();
-  const { rows, cols } = gridFor(length);
-  // As large as fits the screen, keeping the grid's shape.
-  const setWidth = Math.min(width - wp(24), (height * 0.7 * cols) / rows);
+  const { rows, cols, widthShare } = gridFor(length);
+  // As large as fits the screen, keeping the grid's shape: the width a full row
+  // of three would have, so a single or twin is drawn at the same size.
+  const setWidth = Math.min(
+    width - wp(24),
+    (height * 0.75 * cols) / rows / widthShare,
+  );
   return (
     <Modal
       visible
@@ -143,7 +185,9 @@ export const EmblemSetViewer = ({
 };
 
 const styles = StyleSheet.create({
-  set: { width: '100%', backgroundColor: '#000' },
+  set: { alignSelf: 'center', backgroundColor: '#000' },
+  // The full width a capped set may use, measured before it is drawn.
+  measure: { width: '100%', alignItems: 'center' },
   framed: {
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
@@ -155,6 +199,16 @@ const styles = StyleSheet.create({
   cell: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   latest: { borderWidth: 1.5, borderColor: '#E8D58A', borderRadius: 6 },
   butterfly: { width: '90%', height: '90%' },
+  failedCell: {
+    width: '78%',
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(226, 160, 154, 0.5)',
+  },
   viewer: {
     flex: 1,
     alignItems: 'center',

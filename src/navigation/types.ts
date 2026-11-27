@@ -61,12 +61,17 @@ export type RootStackParamList = {
   Listing: { id: string };
   PackageDetail: { id: PackageId };
   RetreatDetail: undefined;
+  // Direct messages.
+  Conversation: { threadId: string; name?: string };
+  BlockedMembers: undefined;
+  MemberProfile: { userId: string; name?: string };
 };
 
 export type RootTabParamList = {
   Home: undefined;
   Journal: undefined;
   Discover: undefined;
+  Messages: undefined;
   Collect: undefined;
   Profile: undefined;
 };

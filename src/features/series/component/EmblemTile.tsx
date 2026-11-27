@@ -50,6 +50,10 @@ type Props = {
   revealedTiles?: number[];
   // The level in words instead of the coloured rarity mark (the collective artwork).
   plain?: boolean;
+  // Converted into an NFT: a gold frame.
+  nft?: boolean;
+  // Readings that failed, shown as placeholders.
+  failedTiles?: number[];
 };
 
 /**
@@ -69,6 +73,8 @@ const EmblemTile = ({
   compact = false,
   revealedTiles,
   plain = false,
+  nft = false,
+  failedTiles,
 }: Props) => (
   <Pressable
     accessibilityRole="imagebutton"
@@ -76,11 +82,13 @@ const EmblemTile = ({
     onPress={onPress}
     style={({ pressed }) => [{ width }, pressed && styles.pressed]}
   >
-    <View style={styles.frame}>
+    {/* At least square; a longer set (three to a row) makes it taller. */}
+    <View style={[styles.frame, nft && styles.frameNft, { minHeight: width }]}>
       <EmblemSet
         artworkKey={artworkKey}
         length={length}
         revealedTiles={revealedTiles}
+        failedTiles={failedTiles}
         framed={false}
       />
     </View>
@@ -115,19 +123,20 @@ const EmblemTile = ({
 export default memo(EmblemTile);
 
 const styles = StyleSheet.create({
-  // Square and black, as the emblems were made to be seen.
+  // Black, as the emblems were made to be seen; square or taller.
   frame: {
     width: '100%',
-    aspectRatio: 1,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(232, 213, 138, 0.3)',
     borderRadius: 12,
     backgroundColor: '#000',
-    // The set of emblems, centred: one row for Level 1, up to four for Level 4.
+    // The set of emblems, centred: one row of three for Level 1, eight for Level 4.
     justifyContent: 'center',
     padding: 4,
   },
+  // A converted NFT: framed in gold, as the client's artwork shows.
+  frameNft: { borderWidth: 2, borderColor: '#D9C77E' },
 
   owner: {
     marginTop: 8,

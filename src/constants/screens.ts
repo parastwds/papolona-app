@@ -55,6 +55,11 @@ export const SCREENS = {
   packageDetail: 'PackageDetail',
   // The Château de Puycharnaud retreat, by application.
   retreatDetail: 'RetreatDetail',
+  // Direct messages: one conversation, and the members the user blocked.
+  conversation: 'Conversation',
+  blockedMembers: 'BlockedMembers',
+  // A member's profile, opened from search in Discover.
+  memberProfile: 'MemberProfile',
 } as const;
 
 export type ScreenName = (typeof SCREENS)[keyof typeof SCREENS];
@@ -63,6 +68,7 @@ export const BOTTOMTABSCREN = {
   home: 'Home',
   journal: 'Journal',
   discover: 'Discover',
+  messages: 'Messages',
   collect: 'Collect',
   profile: 'Profile',
 } as const;

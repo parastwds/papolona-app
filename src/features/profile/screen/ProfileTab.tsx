@@ -30,6 +30,7 @@ import { SCREENS } from '@/constants/screens';
 import { font, hp, wp } from '@/utils/responsive';
 import { RootStackParamList } from '@/navigation/types';
 import CustomHeader from '@/components/CustomHeader';
+import { probationCompact } from '@/features/home/probation';
 import AppMenuItem from '../component/AppMenuItem';
 import EditProfileSheet from '../component/EditProfileSheet';
 import PhotoViewer from '@/components/PhotoViewer';
@@ -46,6 +47,7 @@ import {
   useMembership,
   useMyListings,
   useProbation,
+  useProfileAccessRequests,
 } from '@/services/queries';
 import { formatPrice } from '@/services/session';
 import { useSyncTimeZone } from '@/services/useSyncTimeZone';
@@ -94,6 +96,7 @@ const ProfileTab = () => {
   // Saves the phone's time zone, which reminder emails are timed by.
   const timeZone = useSyncTimeZone();
   const probation = useProbation();
+  const accessRequests = useProfileAccessRequests();
   const membership = useMembership(user?.status === 'member');
   // NFTs the user has sold on the marketplace, and what they received.
   const sold = (useMyListings(!!user).data?.listings ?? []).filter(
@@ -115,10 +118,10 @@ const ProfileTab = () => {
     ? membership.data?.active?.isActive
       ? `Active ${typeTitle ? `${typeTitle} ` : ''}member`
       : `${typeTitle ? `${typeTitle} ` : ''}Member`
-    : progress && progress.readingsDone >= progress.readingsRequired
+    : progress?.complete
     ? 'Apprenticeship complete'
     : progress
-    ? `Apprenticeship · ${progress.readingsDone} of ${progress.readingsRequired} readings`
+    ? `Apprentice · ${probationCompact(progress)}`
     : user.status.charAt(0).toUpperCase() + user.status.slice(1);
   // What the account holds, as label and value; null where nothing is set yet.
   const details: { label: string; value: string | null }[] = user
@@ -357,6 +360,12 @@ const ProfileTab = () => {
             <AppMenuItem
               title="Notifications & reminders"
               icon={Bell}
+              // Members waiting to see your readings and NFTs.
+              badge={
+                accessRequests.data?.length
+                  ? `${accessRequests.data.length} NEW`
+                  : undefined
+              }
               onPress={() => navigation.navigate(SCREENS.reminders)}
             />
             <View style={styles.menuDivider} />

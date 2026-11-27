@@ -76,7 +76,9 @@ const Topic = ({
 const HelpInformation = () => {
   const navigation = useNavigation<Nav>();
   const probation = useProbation();
-  const required = probation.data?.readingsRequired ?? 28;
+  const days = probation.data?.daysRequired ?? 28;
+  const required = probation.data?.readingsRequired ?? 30;
+  const multiple = probation.data?.readingsStep ?? 3;
 
   return (
     <ProfileSubScreen title="Help & information">
@@ -92,11 +94,13 @@ const HelpInformation = () => {
         <RowDivider inset="gutter" />
         <Topic title="Apprenticeship & publishing">
           <Text style={subText.body}>
-            Every new account starts as an apprentice. Each interpretation the
-            AI judge passes is one day forward; a reading that doesn't pass
-            keeps you on the same day until a later one passes. After {required}{' '}
-            passed readings your apprenticeship is complete and you can join the
-            collective, free.
+            Every new account starts as an apprentice for {days} days. Each
+            interpretation the AI judge passes is one reading; there is no daily
+            limit. Your apprenticeship is complete once the {days} days are up
+            and you have passed at least {required} readings, in a multiple of{' '}
+            {multiple} ({required}, {required + multiple},{' '}
+            {required + 2 * multiple}…). Then
+            you can join the collective, free, and choose your membership.
           </Text>
           <Text style={subText.body}>
             Members may start a series of readings: Single (1) and Twin (2) for
