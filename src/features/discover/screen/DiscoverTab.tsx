@@ -31,11 +31,17 @@ const MUTED = '#B4B8AB';
 // The Pyramid itself, for the story's tile.
 const PYRAMID = require('@assets/enigma_prism.jpg');
 // Four members' emblems, as a glimpse of the wall they make together.
+// Three rows of three, as every emblem grid in the app.
 const WALL_GLIMPSE = [
   'butterfly_03',
   'butterfly_07',
   'butterfly_11',
   'butterfly_14',
+  'butterfly_01',
+  'butterfly_05',
+  'butterfly_09',
+  'butterfly_12',
+  'butterfly_15',
 ];
 
 const STATS: { key: keyof CommunityStats; one: string; many: string }[] = [
@@ -315,9 +321,10 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    padding: 10,
+    alignContent: 'center',
+    padding: 8,
   },
-  glimpseCell: { width: '50%', height: '50%', padding: 6 },
+  glimpseCell: { width: '33.33%', aspectRatio: 1, padding: 4 },
   pyramid: { width: '100%', height: '100%', transform: [{ scale: 0.86 }] },
   // A quiet box: a dark wash on the artwork and one thin edge.
   stat: {

@@ -272,6 +272,7 @@ const SeriesDetail = ({ navigation, route }: Props) => {
           length={item.length}
           revealedTiles={item.revealedTiles}
           framed={false}
+          maxHeight={wp(400)}
         />
       </View>
       <View style={styles.zoomHint}>
@@ -603,7 +604,7 @@ const SeriesDetail = ({ navigation, route }: Props) => {
         </Text>
         <Text style={styles.sheetText}>
           It becomes public on the collective artwork. Papolona, as your agent,
-          first offers it to Collector members in an auction for 90 days:
+          first offers it to Collector members in an auction for 30 days:
           Collectors bid from your starting price, and the highest bid wins
           when the auction closes. If nobody bids, it opens to everyone in
           Papolona at your price. Papolona shares the sale with you equally: it
@@ -755,7 +756,8 @@ const styles = StyleSheet.create({
   // Black, as the emblems were made to be seen, with one thin edge.
   frame: {
     width: '100%',
-    aspectRatio: 1.1,
+    // At least this tall; a longer set (three to a row) makes it taller.
+    minHeight: wp(320),
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(232, 213, 138, 0.3)',

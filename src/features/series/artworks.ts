@@ -68,17 +68,25 @@ export const emblemKeyFor = (artworkKey: string, tileIndex: number): string => {
   return BUTTERFLY_KEYS[(start + tileIndex) % BUTTERFLY_KEYS.length];
 };
 
-// How a series' emblems are laid out, by its length (the server's grids: 3 is 1 x 3 … 24 is 4 x 6).
-const GRIDS: Record<number, { rows: number; cols: number }> = {
-  1: { rows: 1, cols: 1 },
-  2: { rows: 1, cols: 2 },
-  3: { rows: 1, cols: 3 },
-  6: { rows: 2, cols: 3 },
-  12: { rows: 3, cols: 4 },
-  24: { rows: 4, cols: 6 },
+// Every emblem grid in the app is three butterflies wide and grows lengthwise:
+// 3 is one row, 6 two, 12 four and 24 eight rows of three.
+export const EMBLEM_COLUMNS = 3;
+
+/**
+ * How a set of `length` emblems is laid out: three to a row, as many rows as it
+ * needs. A single or a twin is narrower than a full row (one or two columns),
+ * drawn at `widthShare` of the width so each butterfly keeps the size it has in
+ * a full row of three.
+ */
+export const gridFor = (length: number) => {
+  const total = Math.max(1, length);
+  const cols = Math.min(EMBLEM_COLUMNS, total);
+  return {
+    rows: Math.ceil(total / EMBLEM_COLUMNS),
+    cols,
+    widthShare: cols / EMBLEM_COLUMNS,
+  };
 };
-export const gridFor = (length: number) =>
-  GRIDS[length] ?? { rows: 1, cols: Math.max(1, length) };
 
 /** A transparent butterfly emblem (rather than a full-bleed painting). */
 export const isEmblem = (key: string) => key.startsWith('butterfly_');

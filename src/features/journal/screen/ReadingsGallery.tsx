@@ -12,7 +12,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { ChevronRight } from 'lucide-react-native';
+import { ChevronRight, X } from 'lucide-react-native';
 
 import { font, hp, wp } from '@/utils/responsive';
 import { COLORS as THEME_COLORS } from '@/theme/colors';
@@ -37,12 +37,31 @@ type Props = NativeStackScreenProps<RootStackParamList, 'ReadingsGallery'>;
 
 const MIN_CONTEST_LENGTH = 20;
 
+/** "Wed 25 Nov 2026 · 2:42 PM" */
+const readingDate = (iso: string) => {
+  const d = new Date(iso);
+  return `${d.toLocaleDateString([], {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })} · ${d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+};
+
+/** One row of the fact table: a label, then its value. */
+const Fact = ({ label, children }: { label: string; children: React.ReactNode }) => (
+  <View style={styles.factRow}>
+    <Text style={styles.factLabel}>{label}</Text>
+    <View style={styles.factValueWrap}>{children}</View>
+  </View>
+);
+
 /**
  * A reading that failed all three attempts may have its judgement contested,
  * once, within 90 days: the member says why they believe it is coherent and it
  * is emailed to Papolona with the reading. Once sent, it shows what they wrote.
  */
-const ContestBox = ({
+const ContestSection = ({
   reading,
   onContested,
 }: {
@@ -56,9 +75,11 @@ const ContestBox = ({
 
   if (reading.contest) {
     return (
-      <View style={styles.detailBox}>
-        <Text style={styles.boxLabel}>Judgement contested</Text>
-        <Text style={styles.detailFeedback}>
+      <>
+        <Text accessibilityRole="header" style={styles.subheading}>
+          Judgement contested
+        </Text>
+        <Text style={styles.body}>
           Sent to Papolona on{' '}
           {new Date(reading.contest.at).toLocaleDateString([], {
             day: 'numeric',
@@ -67,8 +88,10 @@ const ContestBox = ({
           })}
           . Papolona will reply by email.
         </Text>
-        <Text style={styles.detailText}>{reading.contest.text}</Text>
-      </View>
+        <View style={styles.quote}>
+          <Text style={styles.quoteText}>{reading.contest.text}</Text>
+        </View>
+      </>
     );
   }
 
@@ -80,19 +103,23 @@ const ContestBox = ({
     try {
       onContested(await contestReading(reading.id, text.trim()));
     } catch (err) {
-      setError(getErrorMessage(err, 'Could not send your contest. Please try again.'));
+      setError(
+        getErrorMessage(err, 'Could not send your contest. Please try again.'),
+      );
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <View style={styles.detailBox}>
-      <Text style={styles.boxLabel}>Contest this judgement</Text>
-      <Text style={styles.detailFeedback}>
-        This reading did not pass after all three attempts. If you believe it is
-        coherent, tell Papolona why: your reading and your case are sent to
-        Papolona, who will reply by email. You can contest a reading once.
+    <>
+      <Text accessibilityRole="header" style={styles.subheading}>
+        Contest this judgement
+      </Text>
+      <Text style={styles.body}>
+        If you believe this reading is coherent, tell Papolona why. Your reading
+        and your case are sent to Papolona, who replies by email. You can contest
+        a reading once.
       </Text>
       {writing ? (
         <>
@@ -100,6 +127,7 @@ const ContestBox = ({
             value={text}
             onChangeText={setText}
             multiline
+            autoFocus
             maxLength={3000}
             textAlignVertical="top"
             placeholder="Why I believe my reading is coherent…"
@@ -107,34 +135,194 @@ const ContestBox = ({
             accessibilityLabel="Why you believe your reading is coherent"
             style={styles.contestInput}
           />
-          {error ? <Text style={styles.contestError}>{error}</Text> : null}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ disabled: !canSend, busy }}
-            disabled={!canSend}
-            onPress={send}
-            style={({ pressed }) => [
-              styles.contestButton,
-              !canSend && styles.disabled,
-              pressed && styles.pressed,
-            ]}
-          >
-            {busy ? (
-              <ActivityIndicator color="#172016" />
-            ) : (
-              <Text style={styles.contestButtonText}>Send to Papolona</Text>
-            )}
-          </Pressable>
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          <View style={styles.actions}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                setWriting(false);
+                setError('');
+              }}
+              style={({ pressed }) => [styles.secondary, pressed && styles.pressed]}
+            >
+              <Text style={styles.secondaryText}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !canSend, busy }}
+              disabled={!canSend}
+              onPress={send}
+              style={({ pressed }) => [
+                styles.primary,
+                !canSend && styles.disabled,
+                pressed && styles.pressed,
+              ]}
+            >
+              {busy ? (
+                <ActivityIndicator color="#172016" />
+              ) : (
+                <Text style={styles.primaryText}>Send</Text>
+              )}
+            </Pressable>
+          </View>
         </>
       ) : (
         <Pressable
           accessibilityRole="button"
           onPress={() => setWriting(true)}
-          style={({ pressed }) => [styles.contestButton, pressed && styles.pressed]}
+          style={({ pressed }) => [
+            styles.secondary,
+            styles.wide,
+            pressed && styles.pressed,
+          ]}
         >
-          <Text style={styles.contestButtonText}>Contest judgement</Text>
+          <Text style={styles.secondaryText}>Contest judgement</Text>
         </Pressable>
       )}
+    </>
+  );
+};
+
+/**
+ * One reading, opened from the readings or the calendar, laid out like the
+ * Journal and the listing screens: the clue as tiles with its verdict and
+ * question, a table of facts, the interpretation with its bites in a grid, and
+ * (after three failed attempts) a way to contest the judgement.
+ */
+const ReadingDetail = ({
+  reading,
+  onOpenDay,
+  onContested,
+  onClose,
+}: {
+  reading: Reading;
+  onOpenDay: () => void;
+  onContested: (reading: Reading) => void;
+  onClose: () => void;
+}) => {
+  const judged = reading.interpretation;
+  const valid = judged?.verdict === 'pass';
+  const parts = judged?.parts ?? [];
+  const attempts = reading.attempts ?? (judged ? 1 : 0);
+  const maxAttempts = reading.maxAttempts ?? 3;
+  const ratings = reading.ratings;
+
+  return (
+    <View>
+      {/* The sheet is tall: a way to close it that is always in reach. */}
+      <View style={styles.headRow}>
+        <View style={styles.closeSpacer} />
+        <Text style={[styles.flex, styles.date]}>
+          {readingDate(reading.generatedAt)}
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+          onPress={onClose}
+          hitSlop={10}
+          style={({ pressed }) => [styles.close, pressed && styles.pressed]}
+        >
+          <X size={18} color={COLORS.cream} strokeWidth={1.8} />
+        </Pressable>
+      </View>
+
+      {/* The clue as the Journal shows it: one tile per letter. */}
+      <View
+        style={styles.tiles}
+        accessible
+        accessibilityLabel={`Clue string ${reading.clue.split('').join(' ')}`}
+      >
+        {reading.clue.split('').map((letter, i) => (
+          <View key={i} style={styles.tile}>
+            <Text style={styles.tileLetter}>{letter}</Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={[styles.badge, !valid && styles.badgeFail]}>
+        <Text style={[styles.badgeText, !valid && styles.failText]}>
+          {valid ? 'Coherent' : 'Incomplete or invalid'}
+        </Text>
+      </View>
+
+      <Text style={styles.question}>
+        {reading.question || 'Left blank: an invitation for Papolona’s comment.'}
+      </Text>
+
+      <View style={styles.facts}>
+        <Fact label="Attempts">
+          <Text style={styles.factValue}>
+            {judged ? `${attempts} of ${maxAttempts}` : 'None'}
+          </Text>
+        </Fact>
+        <View style={styles.divider} />
+        <Fact label="Graduation">
+          <Text style={[styles.factValue, !valid && styles.mutedValue]}>
+            {valid ? 'Counted' : 'Did not count'}
+          </Text>
+        </Fact>
+        {ratings ? (
+          <>
+            <View style={styles.divider} />
+            <Fact label="Satisfaction">
+              <Text style={styles.factValue}>
+                You {starsOf(ratings.user?.satisfaction) ?? '–'}/5 · Papolona{' '}
+                {starsOf(ratings.ai?.satisfaction) ?? '–'}/5
+              </Text>
+            </Fact>
+          </>
+        ) : null}
+        <View style={styles.divider} />
+        {/* The day's notes: kept as written, not edited later. */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Journal: notes from this day, not editable at a later date"
+          onPress={onOpenDay}
+          android_ripple={SUB_RIPPLE}
+          style={({ pressed }) => pressed && styles.pressed}
+        >
+          <Fact label="Journal">
+            <View style={styles.flex}>
+              <Text style={styles.factValue}>Notes from this day</Text>
+              <Text style={styles.factHint}>Not editable at a later date</Text>
+            </View>
+            <ChevronRight size={18} color="#6F8274" strokeWidth={1.6} />
+          </Fact>
+        </Pressable>
+      </View>
+
+      <Text accessibilityRole="header" style={styles.subheading}>
+        My interpretation
+      </Text>
+      {judged?.text ? (
+        <Text style={styles.interpretation}>{judged.text}</Text>
+      ) : (
+        <Text style={styles.body}>
+          {reading.expired
+            ? 'Not interpreted within 12 hours.'
+            : 'Not interpreted.'}
+        </Text>
+      )}
+
+      {/* The bites, two to a row: letters from the clue and what they mean. */}
+      {parts.length > 0 ? (
+        <View style={styles.bites}>
+          {parts.map(part => (
+            <View key={part.part} style={styles.bite}>
+              <Text style={styles.biteLetters}>{part.part}</Text>
+              <Text style={styles.biteMeaning}>{part.meaning}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {judged?.feedback ? (
+        <Text style={styles.feedback}>{judged.feedback}</Text>
+      ) : null}
+
+      {reading.canContest || reading.contest ? (
+        <ContestSection reading={reading} onContested={onContested} />
+      ) : null}
     </View>
   );
 };
@@ -242,122 +430,15 @@ const ReadingsGallery = ({ navigation, route }: Props) => {
         background={SHEET_ARTWORK}
       >
         {open && (
-          <>
-            <Text style={styles.detailDate}>
-              {new Date(open.generatedAt).toLocaleString([], {
-                weekday: 'long',
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric',
-                hour: 'numeric',
-                minute: '2-digit',
-              })}
-            </Text>
-            {/* The day's notes first: kept as written, not edited later. */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Journal: notes from this day, not editable at a later date"
-              onPress={() => openDay(open)}
-              android_ripple={SUB_RIPPLE}
-              style={({ pressed }) => [
-                styles.detailBox,
-                styles.inlineRow,
-                pressed && styles.pressed,
-              ]}
-            >
-              <Text style={styles.boxLabel}>Journal</Text>
-              <Text style={[styles.flex, styles.dayRowText]}>
-                Notes from this day{' '}
-                <Text style={styles.dayRowHint}>
-                  are not editable at a later date
-                </Text>
-              </Text>
-              <ChevronRight size={18} color="#6F8274" strokeWidth={1.6} />
-            </Pressable>
-            <View style={styles.detailBox}>
-              <Text style={styles.boxLabel}>My question</Text>
-              <Text style={styles.detailQuestion}>
-                {open.question || 'Left blank: an invitation for Papolona’s comment.'}
-              </Text>
-            </View>
-            <View style={[styles.detailBox, styles.inlineRow]}>
-              <Text style={styles.boxLabel}>Papolona clue string</Text>
-              <Text
-                style={[styles.flex, styles.detailClue]}
-                adjustsFontSizeToFit
-                numberOfLines={1}
-                accessibilityLabel={open.clue.split('').join(' ')}
-              >
-                {open.clue}
-              </Text>
-            </View>
-            {(() => {
-              const valid = open.interpretation?.verdict === 'pass';
-              return (
-                <View style={styles.detailBox}>
-                  <View style={styles.inlineRow}>
-                    <Text style={styles.boxLabel}>My interpretation</Text>
-                    <View
-                      style={[
-                        styles.verdictBadge,
-                        valid ? styles.badgePass : styles.badgeFail,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.verdictBadgeText,
-                          valid ? styles.verdictPass : styles.verdictFail,
-                        ]}
-                      >
-                        {valid ? 'Coherent' : 'Incomplete or invalid'}
-                      </Text>
-                    </View>
-                  </View>
-                  {open.interpretation?.text ? (
-                    <Text style={styles.detailText}>
-                      {open.interpretation.text}
-                    </Text>
-                  ) : (
-                    <Text style={styles.detailFeedback}>
-                      {open.expired
-                        ? 'Not interpreted within 12 hours.'
-                        : 'Not interpreted.'}
-                    </Text>
-                  )}
-                  {open.interpretation?.feedback ? (
-                    <Text style={styles.detailFeedback}>
-                      {open.interpretation.feedback}
-                    </Text>
-                  ) : null}
-                </View>
-              );
-            })()}
-            {open.interpretation?.verdict !== 'pass' ? (
-              <View style={styles.detailBox}>
-                <Text style={styles.detailNote}>
-                  This reading did not count toward graduation.
-                </Text>
-              </View>
-            ) : null}
-            {open.canContest || open.contest ? (
-              <ContestBox
-                reading={open}
-                onContested={reading => {
-                  setOpen(reading);
-                  queryClient.invalidateQueries({ queryKey: queryKeys.readings });
-                }}
-              />
-            ) : null}
-            {open.ratings ? (
-              <View style={styles.detailBox}>
-                <Text style={styles.boxLabel}>Satisfaction</Text>
-                <Text style={styles.detailText}>
-                  You {starsOf(open.ratings.user?.satisfaction) ?? '–'} / 5 ·
-                  Papolona {starsOf(open.ratings.ai?.satisfaction) ?? '–'} / 5
-                </Text>
-              </View>
-            ) : null}
-          </>
+          <ReadingDetail
+            reading={open}
+            onOpenDay={() => openDay(open)}
+            onClose={() => setOpen(null)}
+            onContested={reading => {
+              setOpen(reading);
+              queryClient.invalidateQueries({ queryKey: queryKeys.readings });
+            }}
+          />
         )}
       </AppBottomModal>
     </ImageBackground>
@@ -372,6 +453,8 @@ const COLORS = {
   cream: '#F1EEE0',
   sage: '#A1BE94',
   muted: '#B4B8AB',
+  danger: '#E2A09A',
+  hairline: 'rgba(161, 190, 148, 0.2)',
 };
 
 const styles = StyleSheet.create({
@@ -399,38 +482,112 @@ const styles = StyleSheet.create({
     lineHeight: font(20),
     marginTop: hp(24),
   },
-  detailDate: {
-    color: COLORS.muted,
-    fontSize: font(14),
+  pressed: { opacity: 0.75 },
+
+  // The reading sheet.
+  date: { color: COLORS.muted, fontSize: font(13), textAlign: 'center' },
+  headRow: { flexDirection: 'row', alignItems: 'center' },
+  closeSpacer: { width: 32 },
+  close: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+    backgroundColor: 'rgba(241, 238, 224, 0.1)',
+  },
+  // The clue, one tile per letter, as in the Journal.
+  tiles: { flexDirection: 'row', gap: wp(6), marginTop: hp(12) },
+  tile: {
+    flex: 1,
+    aspectRatio: 1.12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(232, 213, 138, 0.55)',
+    borderRadius: 10,
+    backgroundColor: 'rgba(58, 52, 28, 0.9)',
+  },
+  tileLetter: { color: COLORS.gold, fontFamily: CLUE_FONT, fontSize: font(22) },
+  // The verdict, as the Journal's pill.
+  badge: {
+    alignSelf: 'center',
+    marginTop: hp(14),
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: 'rgba(232, 213, 138, 0.16)',
+  },
+  badgeFail: { backgroundColor: 'rgba(226, 160, 154, 0.14)' },
+  badgeText: { color: COLORS.gold, fontSize: font(14), fontWeight: '600' },
+  failText: { color: COLORS.danger },
+  question: {
+    marginTop: hp(12),
+    color: COLORS.cream,
+    fontFamily: 'serif',
+    fontStyle: 'italic',
+    fontSize: font(17),
+    lineHeight: font(24),
     textAlign: 'center',
   },
-  detailClue: {
+  // The fact table, as on a listing or an emblem.
+  facts: {
+    marginTop: hp(18),
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.hairline,
+  },
+  factRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: COLORS.hairline },
+  factLabel: { width: wp(108), color: COLORS.muted, fontSize: font(14) },
+  factValueWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  factValue: { flexShrink: 1, color: COLORS.cream, fontSize: font(15) },
+  mutedValue: { color: COLORS.muted },
+  factHint: { marginTop: 2, color: COLORS.muted, fontSize: font(12) },
+  subheading: {
+    marginTop: hp(24),
+    marginBottom: hp(6),
+    color: COLORS.cream,
+    fontFamily: 'serif',
+    fontSize: font(20),
+  },
+  interpretation: { color: COLORS.cream, fontSize: font(15), lineHeight: font(22) },
+  body: { color: COLORS.muted, fontSize: font(14), lineHeight: font(21) },
+  // The bites, two to a row.
+  bites: { flexDirection: 'row', flexWrap: 'wrap', gap: wp(8), marginTop: hp(14) },
+  bite: {
+    width: '48.5%',
+    paddingVertical: hp(10),
+    paddingHorizontal: wp(12),
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(232, 213, 138, 0.35)',
+    backgroundColor: 'rgba(23, 32, 22, 0.55)',
+  },
+  biteLetters: {
     color: COLORS.gold,
     fontFamily: CLUE_FONT,
-    fontSize: font(30),
-    letterSpacing: 5,
-    textAlign: 'right',
+    fontSize: font(18),
+    letterSpacing: 2,
   },
-  // A label and its value side by side in one frame.
-  inlineRow: { flexDirection: 'row', alignItems: 'center', gap: wp(10) },
-  verdictBadge: {
-    paddingVertical: 3,
-    paddingHorizontal: wp(8),
-    borderRadius: 10,
-    borderWidth: 1,
+  biteMeaning: { marginTop: 4, color: COLORS.cream, fontSize: font(14), lineHeight: font(19) },
+  feedback: {
+    marginTop: hp(14),
+    color: COLORS.muted,
+    fontSize: font(14),
+    lineHeight: font(21),
   },
-  badgePass: { borderColor: 'rgba(232, 213, 138, 0.5)' },
-  badgeFail: { borderColor: 'rgba(226, 160, 154, 0.5)' },
-  verdictBadgeText: {
-    fontSize: font(11),
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+  // The member's contest, once sent.
+  quote: {
+    marginTop: hp(10),
+    paddingLeft: wp(12),
+    borderLeftWidth: 2,
+    borderLeftColor: 'rgba(232, 213, 138, 0.5)',
   },
-  detailNote: { color: COLORS.muted, fontSize: font(14) },
+  quoteText: { color: COLORS.cream, fontSize: font(15), lineHeight: font(22) },
   contestInput: {
     minHeight: hp(110),
-    marginTop: hp(10),
+    marginTop: hp(12),
     paddingHorizontal: wp(12),
     paddingVertical: hp(10),
     borderRadius: 12,
@@ -440,57 +597,28 @@ const styles = StyleSheet.create({
     fontSize: font(15),
     lineHeight: font(21),
   },
-  contestError: { marginTop: hp(8), color: '#E2A09A', fontSize: font(13) },
-  contestButton: {
-    minHeight: 44,
-    marginTop: hp(12),
+  error: { marginTop: hp(8), color: COLORS.danger, fontSize: font(13) },
+  // Buttons as in the app's sheets: outline beside filled.
+  actions: { flexDirection: 'row', gap: wp(12), marginTop: hp(14) },
+  primary: {
+    flex: 1,
+    minHeight: 46,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 22,
+    borderRadius: 23,
     backgroundColor: '#D9C77E',
   },
-  contestButtonText: { color: '#172016', fontSize: font(15), fontWeight: '700' },
-  disabled: { opacity: 0.45 },
-  detailQuestion: {
-    marginTop: hp(6),
-    color: COLORS.cream,
-    fontFamily: 'serif',
-    fontStyle: 'italic',
-    fontSize: font(17),
-    lineHeight: font(25),
-  },
-  detailText: {
-    marginTop: hp(6),
-    color: COLORS.cream,
-    fontSize: font(15),
-    lineHeight: font(22),
-  },
-  detailFeedback: {
-    marginTop: hp(8),
-    color: COLORS.muted,
-    fontSize: font(14),
-    lineHeight: font(20),
-  },
-  verdictPass: { color: COLORS.gold },
-  verdictFail: { color: '#E2A09A' },
-  // Each part of the reading in a frame of its own.
-  detailBox: {
-    marginTop: hp(12),
-    paddingVertical: hp(12),
-    paddingHorizontal: wp(14),
+  primaryText: { color: '#172016', fontSize: font(15), fontWeight: '700' },
+  secondary: {
+    flex: 1,
+    minHeight: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 23,
     borderWidth: 1,
-    borderColor: 'rgba(161, 190, 148, 0.3)',
-    borderRadius: 14,
-    backgroundColor: 'rgba(2, 8, 5, 0.45)',
+    borderColor: 'rgba(217, 199, 126, 0.6)',
   },
-  boxLabel: {
-    color: COLORS.sage,
-    fontSize: font(13),
-    fontWeight: '600',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-  },
-  dayRowText: { color: COLORS.cream, fontSize: font(16) },
-  dayRowHint: { marginTop: 2, color: COLORS.muted, fontSize: font(13) },
-  pressed: { opacity: 0.75 },
+  secondaryText: { color: COLORS.gold, fontSize: font(15), fontWeight: '600' },
+  wide: { flex: 0, marginTop: hp(14) },
+  disabled: { opacity: 0.45 },
 });

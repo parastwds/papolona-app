@@ -109,6 +109,7 @@ const WallTile = ({ navigation, route }: Props) => {
               artworkKey={tile.artworkKey}
               length={tile.length}
               framed={false}
+              maxHeight={wp(400)}
             />
           </View>
           <View style={styles.zoomHint}>
@@ -255,7 +256,8 @@ const styles = StyleSheet.create({
   // Black, as the emblems were made to be seen, with one thin edge.
   frame: {
     width: '100%',
-    aspectRatio: 1.1,
+    // At least this tall; a longer set (three to a row) makes it taller.
+    minHeight: wp(320),
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(232, 213, 138, 0.3)',

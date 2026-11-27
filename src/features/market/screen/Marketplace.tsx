@@ -117,7 +117,7 @@ const Marketplace = ({ navigation }: Props) => {
       <Text style={[styles.text, styles.empty]}>
         {membership.data?.membershipType === 'collector'
           ? 'Nothing for sale yet. Active members can sell an NFT as soon as they build and convert it.'
-          : 'Nothing open to everyone yet. New NFTs go to Collector members first, in a 90-day auction, and appear here if nobody bids.'}
+          : 'Nothing open to everyone yet. New NFTs go to Collector members first, in a 30-day auction, and appear here if nobody bids.'}
       </Text>
     );
   };
@@ -146,7 +146,7 @@ const Marketplace = ({ navigation }: Props) => {
               NFTs recently converted, which appear at the top of the Papolona
               collaborative systems artwork. As each seller’s agent, Papolona
               offers every NFT to Collector members first, in an auction lasting{' '}
-              {market.data?.pages[0]?.auctionDays ?? 90} days: the highest bid
+              {market.data?.pages[0]?.auctionDays ?? 30} days: the highest bid
               wins. NFTs that receive no bids then open to everyone at their
               price. Buy one and it moves to your Gallery, under Bought.
             </Text>

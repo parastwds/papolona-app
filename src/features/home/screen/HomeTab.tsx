@@ -109,6 +109,7 @@ const HomeTab = () => {
                   artworkKey={tile.artworkKey}
                   length={tile.length}
                   framed={false}
+                  maxHeight={wp(300)}
                 />
               </View>
             ) : (
@@ -171,7 +172,8 @@ const styles = StyleSheet.create({
   // One thin edge, so a dark artwork still has a boundary on the dark page.
   frame: {
     width: '100%',
-    aspectRatio: 4 / 3,
+    // At least this tall; a longer set (three to a row) makes it taller.
+    minHeight: wp(260),
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(232, 213, 138, 0.3)',

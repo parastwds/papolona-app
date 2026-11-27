@@ -247,6 +247,7 @@ const ListingDetail = ({ navigation, route }: Props) => {
               artworkKey={series.artworkKey}
               length={series.length}
               framed={false}
+              maxHeight={wp(400)}
             />
           </View>
           <View style={styles.zoomHint}>
@@ -471,7 +472,8 @@ const styles = StyleSheet.create({
   },
   frame: {
     width: '100%',
-    aspectRatio: 1.1,
+    // At least this tall; a longer set (three to a row) makes it taller.
+    minHeight: wp(320),
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(232, 213, 138, 0.3)',

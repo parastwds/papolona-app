@@ -19,7 +19,7 @@ import { getErrorMessage } from '@/services/api';
 import { queryKeys } from '@/services/queryKeys';
 import { useSeriesOptions } from '@/services/queries';
 import { SeriesOption, startSeries } from '@/services/session';
-import { rarityOf } from '../artworks';
+import { gridFor, rarityOf } from '../artworks';
 import RarityMark from '../component/RarityMark';
 import ScreenHeader from '@/features/artwork/component/ScreenHeader';
 import RevealGrid from '../component/RevealGrid';
@@ -109,7 +109,8 @@ const StartSeries = ({ navigation }: Props) => {
               ) : null}
             </View>
             <Text style={styles.optionMeta}>
-              {option.label} · {option.rows} × {option.cols} grid · at least{' '}
+              {option.label} · {gridFor(option.length).rows} ×{' '}
+              {gridFor(option.length).cols} grid · at least{' '}
               {option.minDays} {option.minDays === 1 ? 'day' : 'days'}
             </Text>
             <Text style={styles.reward}>{rewardText(option)}</Text>
